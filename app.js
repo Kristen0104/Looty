@@ -14,18 +14,13 @@ const statusPill = document.querySelector("#statusPill");
 const canvas = document.querySelector("#assetCanvas");
 const ctx = canvas.getContext("2d");
 const variantStrip = document.querySelector("#variantStrip");
+const assetSummary = document.querySelector("#assetSummary");
+const tierSummary = document.querySelector("#tierSummary");
 
 const steps = {
   prompt: document.querySelector("#stepPrompt"),
   generate: document.querySelector("#stepGenerate"),
   remove: document.querySelector("#stepRemove"),
-};
-
-const STYLE_PROMPTS = {
-  pixel:
-    "2D indie game pixel art, 16-bit style, sharp pixels, clear silhouette, pure solid white background for background removal, no background effects, no floating particles, standalone single object.",
-  vector:
-    "bold outline cartoon vector prop, clean cel shading, readable game icon silhouette, pure solid white background for background removal, no background effects, no floating particles, standalone single object.",
 };
 
 const TYPE_LABELS = {
@@ -36,24 +31,42 @@ const TYPE_LABELS = {
   bow: "弓",
   shield: "盾牌",
   potion: "药水",
-  coin: "金币/徽章",
+  coin: "徽章",
 };
+
+const ELEMENT_LABELS = {
+  neutral: "中性",
+  fire: "火属性",
+  ice: "冰属性",
+  lightning: "雷属性",
+  poison: "毒属性",
+  holy: "圣光",
+  shadow: "暗影",
+};
+
+const STYLE_PROMPTS = {
+  pixel:
+    "premium 2D indie game pixel art icon, 32-bit readable silhouette, crisp clusters, pure solid white background for removal, no scene, standalone object",
+  vector:
+    "premium mobile game loot icon, bold clean outline, cel shaded metal, gem details, pure solid white background for removal, no scene, standalone object",
+};
+
+const EXAMPLES = [
+  { text: "火焰长剑", type: "sword", seed: "ember-sword", upgrade: "镶嵌红宝石并附加火焰光刃" },
+  { text: "冰霜法杖", type: "staff", seed: "frost-staff", upgrade: "变为冰属性并增加悬浮水晶" },
+  { text: "雷电战锤", type: "hammer", seed: "storm-hammer", upgrade: "增加雷电符文和能量核心" },
+  { text: "毒液药水", type: "potion", seed: "toxic-potion", upgrade: "变为毒液版本并产生气泡" },
+  { text: "木制盾牌", type: "shield", seed: "oak-shield", upgrade: "附加圣光纹章和金属包边" },
+  { text: "猎人长弓", type: "bow", seed: "hunter-bow", upgrade: "增加冰晶弓弦和寒霜箭头" },
+  { text: "熔岩战斧", type: "axe", seed: "lava-axe", upgrade: "升级为熔岩裂纹和火焰刃" },
+  { text: "暗影徽章", type: "coin", seed: "shadow-badge", upgrade: "变为暗影版本并增加紫色符文" },
+];
 
 let generated = false;
 let lastConfig = null;
-let currentName = "looty-asset";
 let selectedVariant = 0;
-
-const EXAMPLES = [
-  { text: "火焰长剑", type: "sword", seed: "ember-sword" },
-  { text: "冰霜法杖", type: "staff", seed: "frost-staff" },
-  { text: "雷电战锤", type: "hammer", seed: "storm-hammer" },
-  { text: "毒液药水", type: "potion", seed: "toxic-potion" },
-  { text: "木制盾牌", type: "shield", seed: "oak-shield" },
-  { text: "圣光徽章", type: "coin", seed: "holy-badge" },
-  { text: "猎人长弓", type: "bow", seed: "hunter-bow" },
-  { text: "熔岩战斧", type: "axe", seed: "lava-axe" },
-];
+let currentName = "looty-asset";
+let activeUpgradeText = "";
 
 function sanitizeText(value, fallback = "火焰长剑") {
   return value.trim().replace(/\s+/g, " ") || fallback;
@@ -85,52 +98,72 @@ function detectType(text) {
   if (/[弓]/.test(text) || /bow/.test(lower)) return "bow";
   if (/[盾]/.test(text) || /shield/.test(lower)) return "shield";
   if (/[药瓶水剂]/.test(text) || /potion|bottle|elixir/.test(lower)) return "potion";
-  if (/[金币徽章奖章]/.test(text) || /coin|badge|medal/.test(lower)) return "coin";
+  if (/[金币徽章奖章]/.test(text) || /coin|badge|medal|crest/.test(lower)) return "coin";
   return "sword";
 }
 
 function detectElement(text, upgradeText = "") {
   const joined = `${text} ${upgradeText}`.toLowerCase();
-  if (/[火炎焰]/.test(joined) || /fire|flame|burn|lava/.test(joined)) return "fire";
-  if (/[冰霜雪寒]/.test(joined) || /ice|frost|snow|cold/.test(joined)) return "ice";
-  if (/[雷电闪]/.test(joined) || /thunder|lightning|storm/.test(joined)) return "lightning";
-  if (/[毒酸腐]/.test(joined) || /poison|toxic|acid/.test(joined)) return "poison";
-  if (/[圣光神]/.test(joined) || /holy|light|divine/.test(joined)) return "holy";
+  if (/[火炎焰熔岩]/.test(joined) || /fire|flame|burn|lava|ember/.test(joined)) return "fire";
+  if (/[冰霜雪寒晶]/.test(joined) || /ice|frost|snow|cold|crystal/.test(joined)) return "ice";
+  if (/[雷电闪风暴]/.test(joined) || /thunder|lightning|storm|electric/.test(joined)) return "lightning";
+  if (/[毒酸腐液]/.test(joined) || /poison|toxic|acid|venom/.test(joined)) return "poison";
+  if (/[圣光神金]/.test(joined) || /holy|light|divine|gold/.test(joined)) return "holy";
+  if (/[暗影黑夜紫]/.test(joined) || /shadow|dark|void|night/.test(joined)) return "shadow";
   return "neutral";
 }
 
-function colorSet(element, seed) {
+function palette(element, seed) {
   const random = seededRandom(seed);
   const hue = Math.floor(random() * 360);
-  const base = {
-    neutral: [`hsl(${hue} 62% 50%)`, `hsl(${hue} 64% 29%)`, "#f4d47a"],
-    fire: ["#e24b2d", "#8f241a", "#ffb13b"],
-    ice: ["#69d7ff", "#207da2", "#e8fbff"],
-    lightning: ["#7c5cff", "#34226f", "#ffe45c"],
-    poison: ["#62bf4f", "#256f2c", "#d8ff72"],
-    holy: ["#f4d16d", "#9d7624", "#fff6bd"],
+  const sets = {
+    neutral: {
+      main: `hsl(${hue} 60% 54%)`,
+      dark: `hsl(${hue} 62% 28%)`,
+      light: `hsl(${hue} 84% 74%)`,
+      glow: "#f8d77c",
+      metal: "#d8e0ea",
+      metalDark: "#677483",
+    },
+    fire: { main: "#f05a32", dark: "#8f1f16", light: "#ffcf68", glow: "#ff9d2f", metal: "#e9d1b2", metalDark: "#80513b" },
+    ice: { main: "#61d8ff", dark: "#1d6f9d", light: "#e8fbff", glow: "#b8f4ff", metal: "#eaf8ff", metalDark: "#5b8ca3" },
+    lightning: { main: "#7f63ff", dark: "#35206f", light: "#fff06a", glow: "#ffe85c", metal: "#e0dcff", metalDark: "#62559b" },
+    poison: { main: "#69cf53", dark: "#246b31", light: "#d9ff76", glow: "#baff62", metal: "#d7e9c5", metalDark: "#587642" },
+    holy: { main: "#f4c95d", dark: "#8f6421", light: "#fff3b6", glow: "#fff0a6", metal: "#fff0c4", metalDark: "#9c7a38" },
+    shadow: { main: "#7b5cff", dark: "#22133f", light: "#cfbdff", glow: "#a98cff", metal: "#cabbe8", metalDark: "#4c3d65" },
   };
-  return base[element] || base.neutral;
+  return sets[element] || sets.neutral;
+}
+
+function upgradeTier(upgradeText) {
+  return sanitizeText(upgradeText, "") ? 2 : 1;
 }
 
 function buildConfig(upgradeText = "") {
   const text = sanitizeText(promptInput.value);
   const manualType = assetTypeSelect.value;
   const type = manualType === "auto" ? detectType(text) : manualType;
-  const element = detectElement(text, upgradeText);
   const style = styleSelect.value;
+  const element = detectElement(text, upgradeText);
   const seedText = sanitizeText(seedInput.value, "looty-demo");
+  const tier = upgradeTier(upgradeText);
   const seed = hashString(`${seedText}-${type}-${style}-${selectedVariant}`);
-  const colors = colorSet(element, seed);
-  return { text, type, element, style, seed, colors, upgradeText };
+  return {
+    text,
+    type,
+    style,
+    element,
+    tier,
+    seed,
+    colors: palette(element, seed),
+    upgradeText: sanitizeText(upgradeText, ""),
+  };
 }
 
 function buildPrompt() {
-  const config = buildConfig(upgradeInput.value);
-  const typeLabel = TYPE_LABELS[config.type];
-  const upgrade = sanitizeText(upgradeInput.value, "");
-  const upgradeLine = upgrade ? `, upgrade direction: ${upgrade}, keep the same silhouette` : "";
-  return `${config.text}, ${typeLabel}, ${STYLE_PROMPTS[config.style]}${upgradeLine}, final delivery should be a transparent PNG sprite after automatic background removal.`;
+  const config = buildConfig(activeUpgradeText);
+  const upgrade = config.upgradeText ? `, image-to-image upgrade: ${config.upgradeText}, preserve original silhouette, add richer gem, rune and VFX details` : "";
+  return `${config.text}, ${TYPE_LABELS[config.type]}, ${STYLE_PROMPTS[config.style]}${upgrade}, final transparent PNG sprite after automatic background removal.`;
 }
 
 function updatePromptPreview() {
@@ -162,483 +195,398 @@ function wait(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
-function clearCanvas() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+function clearCanvas(targetCtx = ctx) {
+  targetCtx.clearRect(0, 0, targetCtx.canvas.width, targetCtx.canvas.height);
 }
 
-function pixelRect(x, y, w, h, color, scale = 5, originX = 92, originY = 62) {
-  ctx.fillStyle = color;
-  ctx.fillRect(originX + x * scale, originY + y * scale, w * scale, h * scale);
+function withCanvas(targetCtx, draw) {
+  targetCtx.save();
+  draw();
+  targetCtx.restore();
 }
 
-function roundedRectPath(x, y, width, height, radius) {
-  const r = Math.min(radius, width / 2, height / 2);
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + width - r, y);
-  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
-  ctx.lineTo(x + width, y + height - r);
-  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
-  ctx.lineTo(x + r, y + height);
-  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
+function roundedRect(targetCtx, x, y, w, h, r) {
+  const radius = Math.min(r, w / 2, h / 2);
+  targetCtx.moveTo(x + radius, y);
+  targetCtx.lineTo(x + w - radius, y);
+  targetCtx.quadraticCurveTo(x + w, y, x + w, y + radius);
+  targetCtx.lineTo(x + w, y + h - radius);
+  targetCtx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+  targetCtx.lineTo(x + radius, y + h);
+  targetCtx.quadraticCurveTo(x, y + h, x, y + h - radius);
+  targetCtx.lineTo(x, y + radius);
+  targetCtx.quadraticCurveTo(x, y, x + radius, y);
 }
 
-function drawGlow(config) {
-  if (config.element === "neutral") return;
-  const [, , glow] = config.colors;
-  const random = seededRandom(config.seed + hashString(config.element));
-  ctx.save();
-  ctx.fillStyle = glow;
-  ctx.strokeStyle = glow;
-  ctx.lineWidth = config.style === "pixel" ? 0 : 7;
-  for (let i = 0; i < 12; i += 1) {
-    const x = 128 + random() * 256;
-    const y = 78 + random() * 300;
-    if (config.style === "pixel") {
-      ctx.fillRect(Math.round(x / 6) * 6, Math.round(y / 6) * 6, 12, 12);
-    } else {
-      ctx.beginPath();
-      ctx.arc(x, y, 5 + random() * 9, 0, Math.PI * 2);
-      ctx.fill();
+function makeGradient(targetCtx, x0, y0, x1, y1, stops) {
+  const gradient = targetCtx.createLinearGradient(x0, y0, x1, y1);
+  stops.forEach(([stop, color]) => gradient.addColorStop(stop, color));
+  return gradient;
+}
+
+function drawPath(targetCtx, fill, stroke = "#111722", width = 12) {
+  targetCtx.fillStyle = fill;
+  targetCtx.strokeStyle = stroke;
+  targetCtx.lineWidth = width;
+  targetCtx.lineJoin = "round";
+  targetCtx.lineCap = "round";
+  targetCtx.stroke();
+  targetCtx.fill();
+}
+
+function drawGem(targetCtx, x, y, size, colors) {
+  withCanvas(targetCtx, () => {
+    targetCtx.beginPath();
+    targetCtx.moveTo(x, y - size);
+    targetCtx.lineTo(x + size * 0.82, y - size * 0.25);
+    targetCtx.lineTo(x + size * 0.56, y + size * 0.86);
+    targetCtx.lineTo(x - size * 0.56, y + size * 0.86);
+    targetCtx.lineTo(x - size * 0.82, y - size * 0.25);
+    targetCtx.closePath();
+    drawPath(targetCtx, makeGradient(targetCtx, x - size, y - size, x + size, y + size, [[0, colors.light], [0.55, colors.main], [1, colors.dark]]), "#101721", 7);
+    targetCtx.fillStyle = "rgba(255,255,255,0.78)";
+    targetCtx.beginPath();
+    targetCtx.ellipse(x - size * 0.2, y - size * 0.28, size * 0.18, size * 0.1, -0.7, 0, Math.PI * 2);
+    targetCtx.fill();
+  });
+}
+
+function drawRunes(targetCtx, config, positions) {
+  const { colors } = config;
+  withCanvas(targetCtx, () => {
+    targetCtx.strokeStyle = colors.glow;
+    targetCtx.fillStyle = colors.glow;
+    targetCtx.lineWidth = 5;
+    positions.forEach(([x, y, s], index) => {
+      targetCtx.beginPath();
+      if (index % 3 === 0) {
+        targetCtx.arc(x, y, s, 0, Math.PI * 2);
+      } else if (index % 3 === 1) {
+        targetCtx.moveTo(x - s, y + s);
+        targetCtx.lineTo(x, y - s);
+        targetCtx.lineTo(x + s, y + s);
+      } else {
+        targetCtx.moveTo(x - s, y);
+        targetCtx.lineTo(x + s, y);
+        targetCtx.moveTo(x, y - s);
+        targetCtx.lineTo(x, y + s);
+      }
+      targetCtx.stroke();
+    });
+  });
+}
+
+function drawVfx(targetCtx, config) {
+  if (config.element === "neutral" && config.tier === 1) return;
+  const random = seededRandom(config.seed + 9981 + config.tier);
+  const count = config.tier > 1 ? 26 : 16;
+  withCanvas(targetCtx, () => {
+    targetCtx.globalCompositeOperation = "lighter";
+    targetCtx.strokeStyle = config.colors.glow;
+    targetCtx.fillStyle = config.colors.glow;
+    for (let i = 0; i < count; i += 1) {
+      const angle = random() * Math.PI * 2;
+      const radius = 105 + random() * 118;
+      const x = 256 + Math.cos(angle) * radius;
+      const y = 256 + Math.sin(angle) * radius;
+      const size = 4 + random() * (config.tier > 1 ? 12 : 7);
+      if (config.style === "pixel") {
+        const px = Math.round(x / 8) * 8;
+        const py = Math.round(y / 8) * 8;
+        targetCtx.fillRect(px, py, Math.round(size / 2) * 2, Math.round(size / 2) * 2);
+      } else if (config.element === "lightning") {
+        targetCtx.lineWidth = 4;
+        targetCtx.beginPath();
+        targetCtx.moveTo(x, y);
+        targetCtx.lineTo(x + 14 - random() * 28, y + 20 - random() * 40);
+        targetCtx.lineTo(x + 28 - random() * 56, y + 34 - random() * 68);
+        targetCtx.stroke();
+      } else {
+        targetCtx.beginPath();
+        targetCtx.arc(x, y, size, 0, Math.PI * 2);
+        targetCtx.fill();
+      }
     }
-  }
-  ctx.restore();
+  });
 }
 
-function drawPixelSword(config) {
-  const [main, dark, glow] = config.colors;
-  const edge = "#17191d";
-  pixelRect(32, 2, 8, 42, edge);
-  pixelRect(34, 4, 4, 38, "#dfe7ee");
-  pixelRect(34, 4, 2, 32, "#ffffff");
-  pixelRect(27, 42, 18, 6, edge);
-  pixelRect(29, 43, 14, 3, main);
-  pixelRect(30, 48, 12, 18, edge);
-  pixelRect(32, 48, 8, 16, "#8f5837");
-  pixelRect(29, 65, 14, 6, edge);
-  pixelRect(31, 65, 10, 3, glow);
-  pixelRect(31, 12, 10, 6, dark);
+function drawHalo(targetCtx, config) {
+  if (config.tier < 2) return;
+  withCanvas(targetCtx, () => {
+    targetCtx.globalCompositeOperation = "lighter";
+    targetCtx.strokeStyle = config.colors.glow;
+    targetCtx.lineWidth = 8;
+    targetCtx.setLineDash([20, 16]);
+    targetCtx.beginPath();
+    targetCtx.ellipse(256, 266, 172, 66, -0.18, 0, Math.PI * 2);
+    targetCtx.stroke();
+    targetCtx.setLineDash([]);
+  });
 }
 
-function drawPixelAxe(config) {
-  const [main, dark, glow] = config.colors;
-  const edge = "#17191d";
-  pixelRect(34, 12, 7, 55, edge);
-  pixelRect(36, 14, 3, 51, "#9b5b36");
-  pixelRect(18, 8, 26, 18, edge);
-  pixelRect(20, 10, 20, 14, main);
-  pixelRect(15, 16, 10, 16, edge);
-  pixelRect(17, 18, 7, 11, "#dfe7ee");
-  pixelRect(41, 13, 9, 17, edge);
-  pixelRect(41, 15, 7, 12, "#dfe7ee");
-  pixelRect(21, 22, 18, 3, dark);
-  pixelRect(32, 66, 10, 5, glow);
+function pixelate(targetCtx) {
+  const source = document.createElement("canvas");
+  source.width = 128;
+  source.height = 128;
+  const sourceCtx = source.getContext("2d");
+  sourceCtx.imageSmoothingEnabled = true;
+  sourceCtx.drawImage(targetCtx.canvas, 0, 0, 128, 128);
+  clearCanvas(targetCtx);
+  targetCtx.imageSmoothingEnabled = false;
+  targetCtx.drawImage(source, 0, 0, 512, 512);
+  targetCtx.imageSmoothingEnabled = true;
 }
 
-function drawPixelHammer(config) {
-  const [main, dark, glow] = config.colors;
-  const edge = "#17191d";
-  pixelRect(31, 18, 8, 52, edge);
-  pixelRect(33, 20, 4, 48, "#9b5b36");
-  pixelRect(14, 5, 42, 22, edge);
-  pixelRect(17, 8, 36, 16, main);
-  pixelRect(19, 9, 30, 4, "#ffffff");
-  pixelRect(17, 21, 36, 4, dark);
-  pixelRect(11, 10, 7, 12, edge);
-  pixelRect(52, 10, 7, 12, edge);
-  pixelRect(30, 70, 11, 5, glow);
+function drawSword(targetCtx, config) {
+  const c = config.colors;
+  withCanvas(targetCtx, () => {
+    targetCtx.translate(256, 258);
+    targetCtx.rotate(-0.28);
+    targetCtx.beginPath();
+    targetCtx.moveTo(0, -216);
+    targetCtx.lineTo(44, 42);
+    targetCtx.lineTo(0, 96);
+    targetCtx.lineTo(-44, 42);
+    targetCtx.closePath();
+    drawPath(targetCtx, makeGradient(targetCtx, -38, -216, 42, 82, [[0, "#ffffff"], [0.3, c.metal], [0.7, c.light], [1, c.metalDark]]), "#101721", 15);
+    targetCtx.strokeStyle = "rgba(255,255,255,0.72)";
+    targetCtx.lineWidth = 7;
+    targetCtx.beginPath();
+    targetCtx.moveTo(-12, -170);
+    targetCtx.lineTo(-7, 26);
+    targetCtx.stroke();
+    targetCtx.beginPath();
+    roundedRect(targetCtx, -108, 82, 216, 38, 13);
+    drawPath(targetCtx, makeGradient(targetCtx, -108, 82, 108, 120, [[0, c.dark], [0.5, c.main], [1, c.dark]]), "#101721", 13);
+    targetCtx.beginPath();
+    roundedRect(targetCtx, -28, 112, 56, 124, 18);
+    drawPath(targetCtx, makeGradient(targetCtx, -28, 112, 28, 236, [[0, "#9b6239"], [1, "#4d2f22"]]), "#101721", 12);
+    drawGem(targetCtx, 0, 100, config.tier > 1 ? 25 : 18, c);
+    if (config.tier > 1) drawRunes(targetCtx, config, [[0, -94, 8], [0, -28, 7], [-52, 103, 6], [52, 103, 6]]);
+  });
 }
 
-function drawPixelStaff(config) {
-  const [main, dark, glow] = config.colors;
-  const edge = "#17191d";
-  pixelRect(34, 20, 6, 56, edge);
-  pixelRect(36, 22, 2, 52, "#8c5b36");
-  pixelRect(27, 4, 20, 20, edge);
-  pixelRect(30, 7, 14, 14, glow);
-  pixelRect(33, 10, 8, 8, "#ffffff");
-  pixelRect(24, 19, 26, 6, edge);
-  pixelRect(26, 20, 22, 3, main);
-  pixelRect(31, 32, 12, 4, dark);
+function drawAxe(targetCtx, config) {
+  const c = config.colors;
+  withCanvas(targetCtx, () => {
+    targetCtx.translate(256, 260);
+    targetCtx.rotate(-0.22);
+    targetCtx.beginPath();
+    roundedRect(targetCtx, -24, -58, 48, 276, 18);
+    drawPath(targetCtx, makeGradient(targetCtx, 0, -58, 0, 218, [[0, "#b5773f"], [1, "#4e3325"]]), "#101721", 13);
+    targetCtx.beginPath();
+    targetCtx.moveTo(-142, -170);
+    targetCtx.quadraticCurveTo(-28, -250, 86, -158);
+    targetCtx.lineTo(56, -48);
+    targetCtx.quadraticCurveTo(-52, -76, -142, -170);
+    targetCtx.closePath();
+    drawPath(targetCtx, makeGradient(targetCtx, -142, -225, 86, -48, [[0, c.light], [0.45, c.main], [1, c.dark]]), "#101721", 15);
+    targetCtx.beginPath();
+    targetCtx.moveTo(34, -158);
+    targetCtx.quadraticCurveTo(142, -122, 142, -12);
+    targetCtx.quadraticCurveTo(74, -26, 36, -70);
+    targetCtx.closePath();
+    drawPath(targetCtx, makeGradient(targetCtx, 34, -158, 142, -12, [[0, "#ffffff"], [0.45, c.metal], [1, c.metalDark]]), "#101721", 13);
+    drawGem(targetCtx, 3, -80, config.tier > 1 ? 22 : 16, c);
+    if (config.tier > 1) drawRunes(targetCtx, config, [[-55, -155, 7], [4, -10, 6], [4, 74, 6]]);
+  });
 }
 
-function drawPixelBow(config) {
-  const [main, dark, glow] = config.colors;
-  const edge = "#17191d";
-  pixelRect(28, 4, 12, 6, edge);
-  pixelRect(23, 9, 11, 10, edge);
-  pixelRect(18, 18, 10, 14, edge);
-  pixelRect(16, 32, 10, 18, edge);
-  pixelRect(20, 50, 10, 14, edge);
-  pixelRect(27, 64, 12, 6, edge);
-  pixelRect(25, 12, 6, 48, main);
-  pixelRect(54, 8, 2, 60, edge);
-  pixelRect(51, 35, 8, 3, glow);
-  pixelRect(31, 35, 22, 2, dark);
+function drawHammer(targetCtx, config) {
+  const c = config.colors;
+  withCanvas(targetCtx, () => {
+    targetCtx.translate(256, 258);
+    targetCtx.rotate(-0.16);
+    targetCtx.beginPath();
+    roundedRect(targetCtx, -25, -12, 50, 238, 17);
+    drawPath(targetCtx, makeGradient(targetCtx, 0, -12, 0, 226, [[0, "#b5773f"], [1, "#4b3226"]]), "#101721", 13);
+    targetCtx.beginPath();
+    roundedRect(targetCtx, -158, -192, 316, 104, 23);
+    drawPath(targetCtx, makeGradient(targetCtx, -158, -192, 158, -88, [[0, c.metal], [0.48, c.main], [1, c.dark]]), "#101721", 15);
+    targetCtx.strokeStyle = "rgba(255,255,255,0.65)";
+    targetCtx.lineWidth = 8;
+    targetCtx.beginPath();
+    targetCtx.moveTo(-104, -160);
+    targetCtx.lineTo(98, -160);
+    targetCtx.stroke();
+    drawGem(targetCtx, 0, -102, config.tier > 1 ? 25 : 18, c);
+    if (config.tier > 1) drawRunes(targetCtx, config, [[-92, -138, 7], [92, -138, 7], [0, 54, 6]]);
+  });
 }
 
-function drawPixelShield(config) {
-  const [main, dark, glow] = config.colors;
-  const edge = "#17191d";
-  pixelRect(20, 4, 34, 8, edge);
-  pixelRect(16, 12, 42, 28, edge);
-  pixelRect(20, 40, 34, 13, edge);
-  pixelRect(26, 53, 22, 10, edge);
-  pixelRect(22, 9, 30, 35, main);
-  pixelRect(25, 44, 24, 10, dark);
-  pixelRect(32, 13, 8, 36, glow);
-  pixelRect(25, 18, 24, 4, "#ffffff");
+function drawStaff(targetCtx, config) {
+  const c = config.colors;
+  withCanvas(targetCtx, () => {
+    targetCtx.translate(256, 262);
+    targetCtx.rotate(0.15);
+    targetCtx.beginPath();
+    roundedRect(targetCtx, -19, -72, 38, 280, 18);
+    drawPath(targetCtx, makeGradient(targetCtx, 0, -72, 0, 208, [[0, "#a66d39"], [1, "#4b3023"]]), "#101721", 12);
+    targetCtx.beginPath();
+    targetCtx.arc(0, -164, config.tier > 1 ? 76 : 62, 0, Math.PI * 2);
+    drawPath(targetCtx, makeGradient(targetCtx, -70, -224, 70, -104, [[0, c.light], [0.5, c.main], [1, c.dark]]), "#101721", 14);
+    targetCtx.beginPath();
+    targetCtx.arc(0, -164, 28, 0, Math.PI * 2);
+    targetCtx.fillStyle = "rgba(255,255,255,0.78)";
+    targetCtx.fill();
+    targetCtx.beginPath();
+    roundedRect(targetCtx, -78, -94, 156, 40, 14);
+    drawPath(targetCtx, makeGradient(targetCtx, -78, -94, 78, -54, [[0, c.dark], [0.5, c.main], [1, c.dark]]), "#101721", 11);
+    if (config.tier > 1) drawRunes(targetCtx, config, [[-38, -164, 7], [38, -164, 7], [0, 20, 6], [0, 92, 6]]);
+  });
 }
 
-function drawPixelPotion(config) {
-  const [main, dark, glow] = config.colors;
-  const edge = "#17191d";
-  pixelRect(29, 4, 15, 12, edge);
-  pixelRect(32, 6, 9, 9, "#dfe7ee");
-  pixelRect(24, 15, 25, 7, edge);
-  pixelRect(18, 22, 37, 43, edge);
-  pixelRect(21, 25, 31, 37, main);
-  pixelRect(23, 45, 27, 15, dark);
-  pixelRect(26, 27, 10, 8, "#ffffff");
-  pixelRect(38, 34, 8, 8, glow);
+function drawBow(targetCtx, config) {
+  const c = config.colors;
+  withCanvas(targetCtx, () => {
+    targetCtx.translate(256, 256);
+    targetCtx.strokeStyle = "#101721";
+    targetCtx.lineWidth = 22;
+    targetCtx.lineCap = "round";
+    targetCtx.beginPath();
+    targetCtx.moveTo(-38, -196);
+    targetCtx.bezierCurveTo(-154, -90, -154, 90, -38, 196);
+    targetCtx.stroke();
+    targetCtx.strokeStyle = c.main;
+    targetCtx.lineWidth = 14;
+    targetCtx.beginPath();
+    targetCtx.moveTo(-39, -180);
+    targetCtx.bezierCurveTo(-122, -78, -122, 78, -39, 180);
+    targetCtx.stroke();
+    targetCtx.strokeStyle = c.light;
+    targetCtx.lineWidth = 5;
+    targetCtx.beginPath();
+    targetCtx.moveTo(-38, -184);
+    targetCtx.lineTo(-38, 184);
+    targetCtx.stroke();
+    targetCtx.strokeStyle = "#101721";
+    targetCtx.lineWidth = 13;
+    targetCtx.beginPath();
+    targetCtx.moveTo(-35, 0);
+    targetCtx.lineTo(112, 0);
+    targetCtx.stroke();
+    targetCtx.fillStyle = c.glow;
+    targetCtx.beginPath();
+    targetCtx.moveTo(134, 0);
+    targetCtx.lineTo(92, -21);
+    targetCtx.lineTo(103, 0);
+    targetCtx.lineTo(92, 21);
+    targetCtx.closePath();
+    targetCtx.stroke();
+    targetCtx.fill();
+    drawGem(targetCtx, -40, 0, config.tier > 1 ? 20 : 14, c);
+    if (config.tier > 1) drawRunes(targetCtx, config, [[-88, -92, 6], [-88, 92, 6], [68, 0, 5]]);
+  });
 }
 
-function drawPixelCoin(config) {
-  const [main, dark, glow] = config.colors;
-  const edge = "#17191d";
-  pixelRect(22, 8, 30, 6, edge);
-  pixelRect(16, 14, 42, 12, edge);
-  pixelRect(12, 26, 50, 22, edge);
-  pixelRect(16, 48, 42, 12, edge);
-  pixelRect(22, 60, 30, 6, edge);
-  pixelRect(20, 16, 34, 42, main);
-  pixelRect(25, 22, 24, 5, "#fff4b0");
-  pixelRect(24, 49, 26, 5, dark);
-  pixelRect(33, 30, 8, 16, glow);
+function drawShield(targetCtx, config) {
+  const c = config.colors;
+  withCanvas(targetCtx, () => {
+    targetCtx.translate(256, 260);
+    targetCtx.beginPath();
+    targetCtx.moveTo(0, -198);
+    targetCtx.quadraticCurveTo(132, -158, 130, -50);
+    targetCtx.quadraticCurveTo(108, 102, 0, 194);
+    targetCtx.quadraticCurveTo(-108, 102, -130, -50);
+    targetCtx.quadraticCurveTo(-132, -158, 0, -198);
+    targetCtx.closePath();
+    drawPath(targetCtx, makeGradient(targetCtx, -110, -188, 110, 178, [[0, c.light], [0.46, c.main], [1, c.dark]]), "#101721", 15);
+    targetCtx.fillStyle = "rgba(0,0,0,0.18)";
+    targetCtx.beginPath();
+    targetCtx.moveTo(0, -158);
+    targetCtx.lineTo(86, -108);
+    targetCtx.quadraticCurveTo(70, 70, 0, 138);
+    targetCtx.closePath();
+    targetCtx.fill();
+    targetCtx.strokeStyle = c.glow;
+    targetCtx.lineWidth = 14;
+    targetCtx.beginPath();
+    targetCtx.moveTo(0, -134);
+    targetCtx.lineTo(0, 124);
+    targetCtx.stroke();
+    drawGem(targetCtx, 0, -34, config.tier > 1 ? 26 : 18, c);
+    if (config.tier > 1) drawRunes(targetCtx, config, [[-58, -42, 7], [58, -42, 7], [-34, 70, 6], [34, 70, 6]]);
+  });
 }
 
-const PIXEL_DRAWERS = {
-  sword: drawPixelSword,
-  axe: drawPixelAxe,
-  hammer: drawPixelHammer,
-  staff: drawPixelStaff,
-  bow: drawPixelBow,
-  shield: drawPixelShield,
-  potion: drawPixelPotion,
-  coin: drawPixelCoin,
+function drawPotion(targetCtx, config) {
+  const c = config.colors;
+  withCanvas(targetCtx, () => {
+    targetCtx.translate(256, 258);
+    targetCtx.beginPath();
+    roundedRect(targetCtx, -40, -190, 80, 76, 16);
+    drawPath(targetCtx, makeGradient(targetCtx, -40, -190, 40, -114, [[0, "#ffffff"], [1, c.metal]]), "#101721", 12);
+    targetCtx.beginPath();
+    targetCtx.moveTo(-76, -100);
+    targetCtx.quadraticCurveTo(-144, -24, -94, 126);
+    targetCtx.quadraticCurveTo(0, 202, 94, 126);
+    targetCtx.quadraticCurveTo(144, -24, 76, -100);
+    targetCtx.closePath();
+    drawPath(targetCtx, makeGradient(targetCtx, -94, -100, 94, 190, [[0, c.light], [0.42, c.main], [1, c.dark]]), "#101721", 14);
+    targetCtx.fillStyle = "rgba(255,255,255,0.5)";
+    targetCtx.beginPath();
+    targetCtx.ellipse(-38, -18, 22, 36, -0.45, 0, Math.PI * 2);
+    targetCtx.fill();
+    targetCtx.fillStyle = "rgba(0,0,0,0.16)";
+    targetCtx.beginPath();
+    targetCtx.moveTo(-78, 50);
+    targetCtx.quadraticCurveTo(0, 90, 78, 50);
+    targetCtx.lineTo(78, 122);
+    targetCtx.quadraticCurveTo(0, 180, -78, 122);
+    targetCtx.closePath();
+    targetCtx.fill();
+    if (config.tier > 1) drawRunes(targetCtx, config, [[-28, 28, 7], [34, -14, 6], [24, 82, 5]]);
+  });
+}
+
+function drawCoin(targetCtx, config) {
+  const c = config.colors;
+  withCanvas(targetCtx, () => {
+    targetCtx.translate(256, 256);
+    targetCtx.beginPath();
+    targetCtx.arc(0, 0, 154, 0, Math.PI * 2);
+    drawPath(targetCtx, makeGradient(targetCtx, -120, -120, 120, 120, [[0, c.light], [0.48, c.main], [1, c.dark]]), "#101721", 15);
+    targetCtx.strokeStyle = "rgba(0,0,0,0.28)";
+    targetCtx.lineWidth = 18;
+    targetCtx.beginPath();
+    targetCtx.arc(0, 0, 112, 0, Math.PI * 2);
+    targetCtx.stroke();
+    targetCtx.beginPath();
+    targetCtx.moveTo(0, -82);
+    targetCtx.lineTo(24, -24);
+    targetCtx.lineTo(86, -18);
+    targetCtx.lineTo(38, 20);
+    targetCtx.lineTo(52, 80);
+    targetCtx.lineTo(0, 48);
+    targetCtx.lineTo(-52, 80);
+    targetCtx.lineTo(-38, 20);
+    targetCtx.lineTo(-86, -18);
+    targetCtx.lineTo(-24, -24);
+    targetCtx.closePath();
+    drawPath(targetCtx, c.glow, "#101721", 10);
+    if (config.tier > 1) drawRunes(targetCtx, config, [[-78, -76, 6], [78, -76, 6], [-80, 72, 6], [80, 72, 6]]);
+  });
+}
+
+const DRAWERS = {
+  sword: drawSword,
+  axe: drawAxe,
+  hammer: drawHammer,
+  staff: drawStaff,
+  bow: drawBow,
+  shield: drawShield,
+  potion: drawPotion,
+  coin: drawCoin,
 };
 
-function drawPixelAsset(config) {
-  clearCanvas();
-  ctx.imageSmoothingEnabled = false;
-  ctx.save();
-  ctx.translate(50, 18);
-  PIXEL_DRAWERS[config.type](config);
-  ctx.restore();
-  drawGlow(config);
-}
-
-function vectorBase(config, drawBody) {
-  clearCanvas();
-  ctx.save();
-  ctx.translate(256, 256);
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  ctx.strokeStyle = "#17191d";
-  ctx.lineWidth = 16;
-  drawBody();
-  ctx.restore();
-  drawGlow(config);
-}
-
-function drawVectorSword(config) {
-  const [main, dark, glow] = config.colors;
-  vectorBase(config, () => {
-    ctx.rotate(-0.22);
-    ctx.fillStyle = "#dfe7ee";
-    ctx.beginPath();
-    ctx.moveTo(0, -210);
-    ctx.lineTo(35, 55);
-    ctx.lineTo(0, 92);
-    ctx.lineTo(-35, 55);
-    ctx.closePath();
-    ctx.stroke();
-    ctx.fill();
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 7;
-    ctx.beginPath();
-    ctx.moveTo(-8, -160);
-    ctx.lineTo(-8, 35);
-    ctx.stroke();
-    ctx.strokeStyle = "#17191d";
-    ctx.lineWidth = 15;
-    ctx.fillStyle = main;
-    ctx.beginPath();
-    roundedRectPath(-92, 67, 184, 34, 12);
-    ctx.stroke();
-    ctx.fill();
-    ctx.fillStyle = "#9b5b36";
-    ctx.beginPath();
-    roundedRectPath(-24, 91, 48, 130, 16);
-    ctx.stroke();
-    ctx.fill();
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(0, 76, 20, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.fill();
-    ctx.strokeStyle = dark;
-    ctx.lineWidth = 7;
-    ctx.beginPath();
-    ctx.moveTo(-62, 84);
-    ctx.lineTo(62, 84);
-    ctx.stroke();
-  });
-}
-
-function drawVectorAxe(config) {
-  const [main, dark] = config.colors;
-  vectorBase(config, () => {
-    ctx.rotate(-0.2);
-    ctx.fillStyle = "#9b5b36";
-    ctx.beginPath();
-    roundedRectPath(-22, -50, 44, 260, 18);
-    ctx.stroke();
-    ctx.fill();
-    ctx.fillStyle = main;
-    ctx.beginPath();
-    ctx.moveTo(-120, -165);
-    ctx.quadraticCurveTo(-26, -230, 70, -155);
-    ctx.lineTo(38, -60);
-    ctx.quadraticCurveTo(-45, -88, -120, -165);
-    ctx.closePath();
-    ctx.stroke();
-    ctx.fill();
-    ctx.fillStyle = "#dfe7ee";
-    ctx.beginPath();
-    ctx.moveTo(25, -150);
-    ctx.quadraticCurveTo(115, -120, 118, -25);
-    ctx.quadraticCurveTo(63, -40, 30, -72);
-    ctx.closePath();
-    ctx.stroke();
-    ctx.fill();
-    ctx.strokeStyle = dark;
-    ctx.lineWidth = 8;
-    ctx.beginPath();
-    ctx.moveTo(-70, -160);
-    ctx.quadraticCurveTo(-10, -185, 45, -145);
-    ctx.stroke();
-  });
-}
-
-function drawVectorHammer(config) {
-  const [main, dark] = config.colors;
-  vectorBase(config, () => {
-    ctx.rotate(-0.18);
-    ctx.fillStyle = "#9b5b36";
-    ctx.beginPath();
-    roundedRectPath(-24, -10, 48, 230, 18);
-    ctx.stroke();
-    ctx.fill();
-    ctx.fillStyle = main;
-    ctx.beginPath();
-    roundedRectPath(-150, -185, 300, 95, 22);
-    ctx.stroke();
-    ctx.fill();
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 8;
-    ctx.beginPath();
-    ctx.moveTo(-95, -158);
-    ctx.lineTo(86, -158);
-    ctx.stroke();
-    ctx.strokeStyle = dark;
-    ctx.beginPath();
-    ctx.moveTo(-112, -105);
-    ctx.lineTo(112, -105);
-    ctx.stroke();
-  });
-}
-
-function drawVectorStaff(config) {
-  const [main, dark, glow] = config.colors;
-  vectorBase(config, () => {
-    ctx.rotate(0.15);
-    ctx.fillStyle = "#8f5b38";
-    ctx.beginPath();
-    roundedRectPath(-18, -85, 36, 290, 18);
-    ctx.stroke();
-    ctx.fill();
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(0, -160, 64, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.fill();
-    ctx.fillStyle = "#ffffff";
-    ctx.beginPath();
-    ctx.arc(0, -160, 28, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = main;
-    ctx.beginPath();
-    roundedRectPath(-70, -98, 140, 38, 14);
-    ctx.stroke();
-    ctx.fill();
-    ctx.strokeStyle = dark;
-    ctx.lineWidth = 8;
-    ctx.beginPath();
-    ctx.arc(0, -160, 42, 0.2, Math.PI * 1.4);
-    ctx.stroke();
-  });
-}
-
-function drawVectorBow(config) {
-  const [main, dark, glow] = config.colors;
-  vectorBase(config, () => {
-    ctx.strokeStyle = "#17191d";
-    ctx.lineWidth = 20;
-    ctx.beginPath();
-    ctx.moveTo(-35, -190);
-    ctx.bezierCurveTo(-145, -80, -145, 80, -35, 190);
-    ctx.stroke();
-    ctx.strokeStyle = main;
-    ctx.lineWidth = 13;
-    ctx.beginPath();
-    ctx.moveTo(-35, -178);
-    ctx.bezierCurveTo(-118, -75, -118, 75, -35, 178);
-    ctx.stroke();
-    ctx.strokeStyle = "#17191d";
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.moveTo(-35, -182);
-    ctx.lineTo(-35, 182);
-    ctx.stroke();
-    ctx.strokeStyle = dark;
-    ctx.lineWidth = 12;
-    ctx.beginPath();
-    ctx.moveTo(-35, 0);
-    ctx.lineTo(98, 0);
-    ctx.stroke();
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.moveTo(118, 0);
-    ctx.lineTo(82, -18);
-    ctx.lineTo(91, 0);
-    ctx.lineTo(82, 18);
-    ctx.closePath();
-    ctx.stroke();
-    ctx.fill();
-  });
-}
-
-function drawVectorShield(config) {
-  const [main, dark, glow] = config.colors;
-  vectorBase(config, () => {
-    ctx.fillStyle = main;
-    ctx.beginPath();
-    ctx.moveTo(0, -190);
-    ctx.quadraticCurveTo(120, -150, 118, -55);
-    ctx.quadraticCurveTo(104, 92, 0, 190);
-    ctx.quadraticCurveTo(-104, 92, -118, -55);
-    ctx.quadraticCurveTo(-120, -150, 0, -190);
-    ctx.closePath();
-    ctx.stroke();
-    ctx.fill();
-    ctx.fillStyle = dark;
-    ctx.beginPath();
-    ctx.moveTo(0, -150);
-    ctx.lineTo(78, -102);
-    ctx.quadraticCurveTo(67, 66, 0, 130);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = glow;
-    ctx.lineWidth = 14;
-    ctx.beginPath();
-    ctx.moveTo(0, -135);
-    ctx.lineTo(0, 130);
-    ctx.stroke();
-  });
-}
-
-function drawVectorPotion(config) {
-  const [main, dark, glow] = config.colors;
-  vectorBase(config, () => {
-    ctx.fillStyle = "#dfe7ee";
-    ctx.beginPath();
-    roundedRectPath(-35, -180, 70, 70, 14);
-    ctx.stroke();
-    ctx.fill();
-    ctx.fillStyle = main;
-    ctx.beginPath();
-    ctx.moveTo(-70, -95);
-    ctx.quadraticCurveTo(-132, -25, -86, 112);
-    ctx.quadraticCurveTo(0, 190, 86, 112);
-    ctx.quadraticCurveTo(132, -25, 70, -95);
-    ctx.closePath();
-    ctx.stroke();
-    ctx.fill();
-    ctx.fillStyle = dark;
-    ctx.beginPath();
-    ctx.moveTo(-75, 45);
-    ctx.quadraticCurveTo(0, 82, 75, 45);
-    ctx.lineTo(75, 112);
-    ctx.quadraticCurveTo(0, 178, -75, 112);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(38, -8, 18, 0, Math.PI * 2);
-    ctx.fill();
-  });
-}
-
-function drawVectorCoin(config) {
-  const [main, dark, glow] = config.colors;
-  vectorBase(config, () => {
-    ctx.fillStyle = main;
-    ctx.beginPath();
-    ctx.arc(0, 0, 150, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.fill();
-    ctx.strokeStyle = dark;
-    ctx.lineWidth = 18;
-    ctx.beginPath();
-    ctx.arc(0, 0, 112, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.moveTo(0, -72);
-    ctx.lineTo(22, -20);
-    ctx.lineTo(78, -16);
-    ctx.lineTo(34, 18);
-    ctx.lineTo(48, 72);
-    ctx.lineTo(0, 42);
-    ctx.lineTo(-48, 72);
-    ctx.lineTo(-34, 18);
-    ctx.lineTo(-78, -16);
-    ctx.lineTo(-22, -20);
-    ctx.closePath();
-    ctx.stroke();
-    ctx.fill();
-  });
-}
-
-const VECTOR_DRAWERS = {
-  sword: drawVectorSword,
-  axe: drawVectorAxe,
-  hammer: drawVectorHammer,
-  staff: drawVectorStaff,
-  bow: drawVectorBow,
-  shield: drawVectorShield,
-  potion: drawVectorPotion,
-  coin: drawVectorCoin,
-};
-
-function drawAsset(config) {
-  if (config.style === "pixel") {
-    drawPixelAsset(config);
-  } else {
-    VECTOR_DRAWERS[config.type](config);
-  }
+function drawAsset(targetCtx, config) {
+  clearCanvas(targetCtx);
+  targetCtx.imageSmoothingEnabled = true;
+  drawHalo(targetCtx, config);
+  drawVfx(targetCtx, config);
+  DRAWERS[config.type](targetCtx, config);
+  if (config.tier > 1) drawVfx(targetCtx, config);
+  if (config.style === "pixel") pixelate(targetCtx);
 }
 
 function updateDownloadName(config) {
@@ -646,7 +594,12 @@ function updateDownloadName(config) {
     .replace(/[^\w\u4e00-\u9fa5-]+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
-  currentName = `${safeName || "looty-asset"}${config.upgradeText ? "-upgrade" : ""}`;
+  currentName = `${safeName || "looty-asset"}${config.tier > 1 ? "-evolved" : ""}`;
+}
+
+function updateInspector(config) {
+  assetSummary.textContent = `${TYPE_LABELS[config.type]} / ${ELEMENT_LABELS[config.element]}`;
+  tierSummary.textContent = `Tier ${config.tier}${config.tier > 1 ? " 进化" : ""}`;
 }
 
 function cloneConfig(config, variantIndex) {
@@ -654,24 +607,18 @@ function cloneConfig(config, variantIndex) {
   return {
     ...config,
     seed: variantSeed,
-    colors: colorSet(config.element, variantSeed),
+    colors: palette(config.element, variantSeed),
   };
 }
 
-function drawToCanvas(targetCanvas, config) {
-  const image = document.createElement("canvas");
-  image.width = canvas.width;
-  image.height = canvas.height;
-  const imageCtx = image.getContext("2d");
+function drawThumbnail(targetCanvas, config) {
   const targetCtx = targetCanvas.getContext("2d");
-
-  clearCanvas();
-  drawAsset(config);
-  imageCtx.drawImage(canvas, 0, 0);
-
-  targetCtx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
+  const image = document.createElement("canvas");
+  image.width = 512;
+  image.height = 512;
+  drawAsset(image.getContext("2d"), config);
+  clearCanvas(targetCtx);
   targetCtx.drawImage(image, 0, 0, targetCanvas.width, targetCanvas.height);
-  drawAsset(lastConfig || config);
 }
 
 function renderVariants(config) {
@@ -685,22 +632,24 @@ function renderVariants(config) {
     thumb.height = 96;
     const copy = cloneConfig(config, i);
     const label = document.createElement("div");
-    label.innerHTML = `<strong>变体 ${i + 1}</strong><span>${TYPE_LABELS[copy.type]} / ${copy.element}</span>`;
+    label.innerHTML = `<strong>变体 ${i + 1}</strong><span>${ELEMENT_LABELS[copy.element]} / Tier ${copy.tier}</span>`;
     card.append(thumb, label);
     card.addEventListener("click", () => {
       selectedVariant = i;
       runGeneration(config.upgradeText || "");
     });
     variantStrip.append(card);
-    drawToCanvas(thumb, copy);
+    drawThumbnail(thumb, copy);
   }
 }
 
 async function runGeneration(upgradeText = "") {
+  activeUpgradeText = upgradeText;
   const config = buildConfig(upgradeText);
   lastConfig = config;
   updateDownloadName(config);
   updatePromptPreview();
+  updateInspector(config);
 
   resetSteps();
   setStatus("解析需求中");
@@ -708,19 +657,19 @@ async function runGeneration(upgradeText = "") {
   upgradeBtn.disabled = true;
   downloadBtn.disabled = true;
 
-  await wait(220);
+  await wait(180);
   setStep("prompt", "done");
   setStep("generate", "active");
-  setStatus(`生成${TYPE_LABELS[config.type]}轮廓`);
+  setStatus(config.tier > 1 ? "生成进化部件" : "生成图标轮廓");
 
-  await wait(300);
-  drawAsset(config);
+  await wait(280);
+  drawAsset(ctx, config);
   renderVariants(config);
   setStep("generate", "done");
   setStep("remove", "active");
-  setStatus("导出透明 PNG");
+  setStatus("处理透明通道");
 
-  await wait(220);
+  await wait(180);
   setStep("remove", "done");
   setStatus("生成完成", true);
   generated = true;
@@ -733,7 +682,8 @@ function renderInitialExample() {
   const config = buildConfig("");
   lastConfig = config;
   updateDownloadName(config);
-  drawAsset(config);
+  updateInspector(config);
+  drawAsset(ctx, config);
   renderVariants(config);
   generated = true;
   markReady();
@@ -747,7 +697,9 @@ function randomExample() {
   promptInput.value = example.text;
   assetTypeSelect.value = example.type;
   seedInput.value = example.seed;
+  upgradeInput.value = example.upgrade;
   selectedVariant = 0;
+  activeUpgradeText = "";
   runGeneration("");
 }
 
@@ -778,8 +730,14 @@ async function copyPrompt() {
 }
 
 [promptInput, assetTypeSelect, styleSelect, seedInput, upgradeInput].forEach((element) => {
-  element.addEventListener("input", updatePromptPreview);
-  element.addEventListener("change", updatePromptPreview);
+  element.addEventListener("input", () => {
+    if (element === upgradeInput) activeUpgradeText = "";
+    updatePromptPreview();
+  });
+  element.addEventListener("change", () => {
+    if (element === upgradeInput) activeUpgradeText = "";
+    updatePromptPreview();
+  });
 });
 
 styleSelect.addEventListener("change", () => runGeneration(lastConfig?.upgradeText || ""));
