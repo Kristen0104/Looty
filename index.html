@@ -3,24 +3,32 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Looty - 2D 游戏素材生成工具</title>
+    <title>Looty - AI 2D 游戏素材生成器</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <main class="app-shell">
-      <header class="topbar">
+      <header class="hero">
         <div>
-          <p class="eyebrow">2D Game Asset MVP</p>
+          <p class="eyebrow">Looty Asset Forge</p>
           <h1>Looty</h1>
+          <p class="slogan">输入道具需求，生成可下载的透明 PNG 游戏素材。</p>
         </div>
-        <p class="slogan">输入需求，直接得到可进引擎的透明 PNG 素材。</p>
+        <div class="hero-stats" aria-label="当前交付能力">
+          <div><strong>512</strong><span>PNG 输出</span></div>
+          <div><strong>Alpha</strong><span>透明通道</span></div>
+          <div><strong>3x</strong><span>候选变体</span></div>
+        </div>
       </header>
 
       <section class="workspace" aria-label="Looty 素材生成工作台">
         <aside class="control-panel">
-          <div class="section-heading">
+          <div class="panel-title">
             <span>01</span>
-            <h2>生成素材</h2>
+            <div>
+              <h2>生成素材</h2>
+              <p>描述越具体，生成的图标越稳定。</p>
+            </div>
           </div>
 
           <label class="field">
@@ -28,62 +36,61 @@
             <textarea id="promptInput" rows="4" maxlength="100" placeholder="例如：火焰长剑、冰霜法杖、木制盾牌、毒液药水">火焰长剑</textarea>
           </label>
 
-          <label class="field">
-            <span>素材类型</span>
-            <select id="assetTypeSelect">
-              <option value="auto">自动识别</option>
-              <option value="sword">剑</option>
-              <option value="axe">斧头</option>
-              <option value="hammer">锤子</option>
-              <option value="staff">法杖</option>
-              <option value="bow">弓</option>
-              <option value="shield">盾牌</option>
-              <option value="potion">药水</option>
-              <option value="coin">金币/徽章</option>
-            </select>
-          </label>
+          <div class="field-grid">
+            <label class="field">
+              <span>素材类型</span>
+              <select id="assetTypeSelect">
+                <option value="auto">自动识别</option>
+                <option value="sword">剑</option>
+                <option value="axe">斧头</option>
+                <option value="hammer">锤子</option>
+                <option value="staff">法杖</option>
+                <option value="bow">弓</option>
+                <option value="shield">盾牌</option>
+                <option value="potion">药水</option>
+                <option value="coin">徽章</option>
+              </select>
+            </label>
 
-          <label class="field">
-            <span>统一画风</span>
-            <select id="styleSelect">
-              <option value="pixel">复古 2D 像素风</option>
-              <option value="vector">美漫粗线矢量风</option>
-            </select>
-          </label>
+            <label class="field">
+              <span>统一画风</span>
+              <select id="styleSelect">
+                <option value="vector">美漫粗线图标</option>
+                <option value="pixel">精致像素风</option>
+              </select>
+            </label>
+          </div>
 
           <label class="field">
             <span>一致性种子</span>
-            <input id="seedInput" maxlength="24" value="looty-demo" placeholder="同一种子保持轮廓和配色一致" />
+            <input id="seedInput" maxlength="24" value="looty-demo" placeholder="同一种子保持轮廓一致" />
           </label>
 
           <div class="button-row">
-            <button id="randomBtn" class="ghost-btn compact-btn" type="button">随机示例</button>
-            <button id="variantsBtn" class="ghost-btn compact-btn" type="button">生成 3 个变体</button>
+            <button id="randomBtn" class="ghost-btn" type="button">随机示例</button>
+            <button id="variantsBtn" class="ghost-btn" type="button">生成 3 个变体</button>
           </div>
 
-          <button id="generateBtn" class="primary-btn" type="button">
-            <span class="btn-icon">生成</span>
-            生成透明 PNG
-          </button>
-
-          <div class="prompt-box">
-            <div class="prompt-title">系统封装 Prompt</div>
-            <p id="promptPreview"></p>
-          </div>
+          <button id="generateBtn" class="primary-btn" type="button">生成透明 PNG</button>
 
           <div class="upgrade-room">
-            <div class="section-heading compact">
+            <div class="panel-title compact">
               <span>02</span>
-              <h2>装备进化</h2>
+              <div>
+                <h2>装备进化</h2>
+                <p>保留基础轮廓，叠加属性、宝石和特效。</p>
+              </div>
             </div>
             <label class="field">
               <span>升级方向</span>
               <input id="upgradeInput" maxlength="60" placeholder="例如：附加冰属性、增加雷电特效、变为毒液版本" />
             </label>
-            <button id="upgradeBtn" class="secondary-btn" type="button" disabled>
-              <span class="btn-icon">进化</span>
-              保持轮廓并升级
-            </button>
+            <button id="upgradeBtn" class="secondary-btn" type="button" disabled>保持轮廓并进化</button>
+          </div>
+
+          <div class="prompt-box">
+            <div class="prompt-title">系统封装 Prompt</div>
+            <p id="promptPreview"></p>
           </div>
         </aside>
 
@@ -96,46 +103,48 @@
             <span id="statusPill" class="status-pill">示例已就绪</span>
           </div>
 
-          <div class="preview-stage">
-            <div class="checkerboard">
-              <canvas id="assetCanvas" width="512" height="512" aria-label="生成的透明 2D 游戏素材"></canvas>
+          <div class="preview-wrap">
+            <div class="preview-stage">
+              <div class="checkerboard">
+                <canvas id="assetCanvas" width="512" height="512" aria-label="生成的透明 2D 游戏素材"></canvas>
+              </div>
+            </div>
+
+            <div class="inspector">
+              <div>
+                <span>当前素材</span>
+                <strong id="assetSummary">剑 / 火属性</strong>
+              </div>
+              <div>
+                <span>进化等级</span>
+                <strong id="tierSummary">Tier 1</strong>
+              </div>
+              <div>
+                <span>交付格式</span>
+                <strong>512x512 PNG</strong>
+              </div>
             </div>
           </div>
 
           <div class="result-actions">
-            <button id="downloadBtn" class="primary-btn small" type="button" disabled>下载 512 PNG</button>
+            <button id="downloadBtn" class="primary-btn small" type="button" disabled>下载 PNG</button>
             <button id="copyPromptBtn" class="ghost-btn" type="button">复制 Prompt</button>
           </div>
 
           <div class="variant-strip" id="variantStrip" aria-label="素材变体列表"></div>
 
-          <dl class="spec-grid">
-            <div>
-              <dt>交付格式</dt>
-              <dd>512x512 PNG / Alpha 透明</dd>
-            </div>
-            <div>
-              <dt>引擎流程</dt>
-              <dd>Unity、Godot、Cocos 可直接作为 Sprite 导入</dd>
-            </div>
-            <div>
-              <dt>一致性策略</dt>
-              <dd>素材类型 + 画风 + 种子锁定基础轮廓</dd>
-            </div>
-          </dl>
-
           <div class="pipeline">
             <div class="pipeline-step active" id="stepPrompt">
               <strong>需求解析</strong>
-              <span>识别素材类型、属性词和统一风格约束。</span>
+              <span>识别类型、属性和画风。</span>
             </div>
             <div class="pipeline-step" id="stepGenerate">
-              <strong>轮廓生成</strong>
-              <span>生成剑、斧、锤、法杖、弓、盾、药水等不同结构。</span>
+              <strong>图标生成</strong>
+              <span>构建轮廓、材质、宝石和特效。</span>
             </div>
             <div class="pipeline-step" id="stepRemove">
               <strong>透明交付</strong>
-              <span>输出带 Alpha 通道的 512x512 PNG，可直接进 2D 引擎。</span>
+              <span>输出 Alpha PNG，可直接导入引擎。</span>
             </div>
           </div>
         </section>
