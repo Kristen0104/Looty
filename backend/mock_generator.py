@@ -93,6 +93,17 @@ def _rect(px, size, x, y, w, h, color, outline=None):
             _put(px, size, xx, yy, color)
 
 
+def _diamond(px, size, cx, cy, radius_x, radius_y, color, outline=None, outline_width=4):
+    _polygon(
+        px,
+        size,
+        [(cx, cy - radius_y), (cx + radius_x, cy), (cx, cy + radius_y), (cx - radius_x, cy)],
+        color,
+        outline,
+        outline_width,
+    )
+
+
 def _draw_vfx(px, size, seed, palette, tier, style):
     main, dark, light, glow = palette
     rng = _hash_int(seed, "vfx", tier)
@@ -158,6 +169,21 @@ def _draw_icon(px, size, asset_type, palette, tier, seed, text, style):
         _circle(px, size, 128, 128, 76, (*main, 255))
         _circle(px, size, 128, 128, 56, (*dark, 80))
         _polygon(px, size, [(128, 78), (144, 112), (181, 116), (152, 138), (162, 174), (128, 154), (94, 174), (104, 138), (75, 116), (112, 112)], (*glow, 255), edge, 5)
+    elif asset_type == "polearm":
+        _rect(px, size, 122, 64, 12, 186, (*wood, 255), edge)
+        _diamond(px, size, 128, 34, 19, 34, (*metal, 255), edge, 7)
+        _line(px, size, 128, 45, 128, 94, 5, (255, 255, 255, 170))
+        _polygon(px, size, [(110, 70), (58, 92), (104, 118), (124, 92)], (*main, 255), edge, 7)
+        _polygon(px, size, [(146, 70), (198, 92), (152, 118), (132, 92)], (*main, 255), edge, 7)
+        _polygon(px, size, [(86, 90), (54, 82), (73, 108)], (*metal, 255), edge, 5)
+        _polygon(px, size, [(170, 90), (202, 82), (183, 108)], (*metal, 255), edge, 5)
+        _rect(px, size, 104, 118, 48, 16, (*dark, 255), edge)
+        _rect(px, size, 108, 150, 40, 14, (*main, 255), edge)
+        _diamond(px, size, 128, 262, 12, 18, (*metal, 255), edge, 5)
+        if tier > 1:
+            _line(px, size, 76, 88, 180, 88, 4, (*glow, 180))
+            _circle(px, size, 128, 130, 10, (*glow, 230))
+            _circle(px, size, 128, 166, 7, (*glow, 220))
     else:
         sides = 6 + (_hash_int(text, seed) % 3)
         points = []

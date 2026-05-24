@@ -8,32 +8,59 @@
   </head>
   <body>
     <main class="app-shell">
-      <header class="hero">
+      <header class="topbar">
         <div>
           <p class="eyebrow">Looty Asset Forge</p>
           <h1>Looty</h1>
-          <p class="slogan">输入道具需求，生成可下载的透明 PNG 游戏素材。</p>
+          <p class="slogan">输入道具想法，生成可下载的透明 PNG 游戏素材。</p>
         </div>
-        <div class="hero-stats" aria-label="当前交付能力">
-          <div><strong>512</strong><span>PNG 输出</span></div>
-          <div><strong>Alpha</strong><span>透明通道</span></div>
-          <div><strong>3x</strong><span>候选变体</span></div>
+        <div class="provider-card">
+          <span>AI Provider</span>
+          <strong id="providerStatus">检测中</strong>
         </div>
       </header>
 
       <section class="workspace" aria-label="Looty 素材生成工作台">
         <aside class="control-panel">
           <div class="panel-title">
+            <span>AI</span>
+            <div>
+              <h2>接口配置</h2>
+              <p>Key 只随本次请求发给本地后端，不会写入文件。</p>
+            </div>
+          </div>
+
+          <div class="field-grid">
+            <label class="field">
+              <span>Provider</span>
+              <select id="providerSelect">
+                <option value="zhipu">ZhipuAI 智谱</option>
+                <option value="dashscope">DashScope 通义万相</option>
+                <option value="openai">OpenAI Images</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>模型</span>
+              <input id="modelInput" maxlength="48" value="glm-image" />
+            </label>
+          </div>
+
+          <label class="field">
+            <span>API Key</span>
+            <input id="apiKeyInput" type="password" autocomplete="off" placeholder="粘贴你的 API Key；不填则读取环境变量" />
+          </label>
+
+          <div class="panel-title compact">
             <span>01</span>
             <div>
               <h2>生成素材</h2>
-              <p>描述越具体，生成的图标越稳定。</p>
+              <p>描述越具体，AI 规划越稳定。</p>
             </div>
           </div>
 
           <label class="field">
             <span>素材描述</span>
-            <textarea id="promptInput" rows="4" maxlength="100" placeholder="例如：火焰长剑、冰霜法杖、木制盾牌、毒液药水">火焰长剑</textarea>
+            <textarea id="promptInput" rows="4" maxlength="120" placeholder="例如：方天画戟、龙骨匕首、水晶头盔、雷电战锤">方天画戟</textarea>
           </label>
 
           <div class="field-grid">
@@ -41,33 +68,36 @@
               <span>素材类型</span>
               <select id="assetTypeSelect">
                 <option value="auto">自动识别</option>
-                <option value="sword">剑</option>
+                <option value="sword">剑 / 刀</option>
                 <option value="axe">斧头</option>
-                <option value="hammer">锤子</option>
+                <option value="hammer">战锤</option>
                 <option value="staff">法杖</option>
                 <option value="bow">弓</option>
                 <option value="shield">盾牌</option>
                 <option value="potion">药水</option>
-                <option value="coin">徽章</option>
+                <option value="coin">徽章 / 金币</option>
+                <option value="polearm">长柄武器</option>
+                <option value="helmet">头盔</option>
+                <option value="glove">手套 / 爪</option>
               </select>
             </label>
 
             <label class="field">
               <span>统一画风</span>
               <select id="styleSelect">
-                <option value="vector">美漫粗线图标</option>
-                <option value="pixel">精致像素风</option>
+                <option value="vector">美漫粗线游戏图标</option>
+                <option value="pixel">精致 2D 像素风</option>
               </select>
             </label>
           </div>
 
           <label class="field">
             <span>一致性种子</span>
-            <input id="seedInput" maxlength="24" value="looty-demo" placeholder="同一种子保持轮廓一致" />
+            <input id="seedInput" maxlength="32" value="looty-demo" placeholder="同一装备系列可复用同一种子" />
           </label>
 
           <div class="button-row">
-            <button id="randomBtn" class="ghost-btn" type="button">随机示例</button>
+            <button id="randomBtn" class="ghost-btn" type="button">示例</button>
             <button id="variantsBtn" class="ghost-btn" type="button">生成 3 个变体</button>
           </div>
 
@@ -83,14 +113,9 @@
             </div>
             <label class="field">
               <span>升级方向</span>
-              <input id="upgradeInput" maxlength="60" placeholder="例如：附加冰属性、增加雷电特效、变为毒液版本" />
+              <input id="upgradeInput" maxlength="80" placeholder="例如：附加雷电核心、变为冰属性、增加毒液光效" value="附加雷电核心" />
             </label>
-            <button id="upgradeBtn" class="secondary-btn" type="button" disabled>保持轮廓并进化</button>
-          </div>
-
-          <div class="prompt-box">
-            <div class="prompt-title">系统封装 Prompt</div>
-            <p id="promptPreview"></p>
+            <button id="upgradeBtn" class="secondary-btn" type="button" disabled>保留轮廓并进化</button>
           </div>
         </aside>
 
@@ -100,10 +125,10 @@
               <p class="eyebrow">Unity / Godot Ready</p>
               <h2>透明素材结果</h2>
             </div>
-            <span id="statusPill" class="status-pill">示例已就绪</span>
+            <span id="statusPill" class="status-pill">待生成</span>
           </div>
 
-          <div class="preview-wrap">
+          <div class="preview-grid">
             <div class="preview-stage">
               <div class="checkerboard">
                 <canvas id="assetCanvas" width="512" height="512" aria-label="生成的透明 2D 游戏素材"></canvas>
@@ -112,8 +137,12 @@
 
             <div class="inspector">
               <div>
-                <span>当前素材</span>
-                <strong id="assetSummary">剑 / 火属性</strong>
+                <span>素材类型</span>
+                <strong id="assetSummary">长柄武器</strong>
+              </div>
+              <div>
+                <span>属性主题</span>
+                <strong id="elementSummary">奥术属性</strong>
               </div>
               <div>
                 <span>进化等级</span>
@@ -121,7 +150,7 @@
               </div>
               <div>
                 <span>交付格式</span>
-                <strong>512x512 PNG</strong>
+                <strong>PNG / Alpha</strong>
               </div>
             </div>
           </div>
@@ -133,18 +162,29 @@
 
           <div class="variant-strip" id="variantStrip" aria-label="素材变体列表"></div>
 
+          <div class="ai-panel">
+            <div>
+              <h3>AI 思考</h3>
+              <ol id="thinkingList"></ol>
+            </div>
+            <div>
+              <h3>系统封装 Prompt</h3>
+              <p id="promptPreview"></p>
+            </div>
+          </div>
+
           <div class="pipeline">
             <div class="pipeline-step active" id="stepPrompt">
               <strong>需求解析</strong>
               <span>识别类型、属性和画风。</span>
             </div>
             <div class="pipeline-step" id="stepGenerate">
-              <strong>图标生成</strong>
-              <span>构建轮廓、材质、宝石和特效。</span>
+              <strong>AI 生图</strong>
+              <span>调用所选 provider 生成候选图。</span>
             </div>
             <div class="pipeline-step" id="stepRemove">
               <strong>透明交付</strong>
-              <span>输出 Alpha PNG，可直接导入引擎。</span>
+              <span>输出可导入引擎的 PNG。</span>
             </div>
           </div>
         </section>
