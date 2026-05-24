@@ -1,0 +1,2 @@
+"""Looty MVP package."""
+
