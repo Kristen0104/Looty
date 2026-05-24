@@ -33,10 +33,6 @@ def _json_response(handler, status, payload):
     handler.wfile.write(body)
 
 
-def _env_mock_allowed():
-    return os.environ.get("LOOTY_ALLOW_MOCK", "").lower() in ("1", "true", "yes")
-
-
 def _request_allows_mock(payload):
     value = payload.get("allowMock")
     return value is True or str(value).lower() in ("1", "true", "yes")
@@ -74,7 +70,7 @@ def _call_provider(provider, prompt, count, api_key=None, model=None):
 
 
 class LootyHandler(BaseHTTPRequestHandler):
-    server_version = "LootyMVP/0.4"
+    server_version = "LootyMVP/0.5"
 
     def do_GET(self):
         if self.path == "/api/health":
@@ -85,7 +81,7 @@ class LootyHandler(BaseHTTPRequestHandler):
                     "ok": True,
                     "provider": _configured_provider(),
                     "configuredProvider": os.environ.get("LOOTY_IMAGE_PROVIDER", "dashscope").lower(),
-                    "mockAllowedByEnv": _env_mock_allowed(),
+                    "supportsRequestMock": True,
                     "supportedProviders": ["zhipu", "dashscope", "openai"],
                 },
             )
@@ -130,6 +126,7 @@ class LootyHandler(BaseHTTPRequestHandler):
         provider_name = (payload.get("provider") or os.environ.get("LOOTY_IMAGE_PROVIDER", "dashscope")).lower()
         request_api_key = payload.get("apiKey") or None
         request_model = payload.get("model") or None
+        allow_mock = _request_allows_mock(payload)
 
         meta = build_prompt(
             text,
@@ -145,18 +142,21 @@ class LootyHandler(BaseHTTPRequestHandler):
         model = None
 
         try:
-            ai_result = _call_provider(
-                provider_name,
-                meta["prompt"],
-                count=3,
-                api_key=request_api_key,
-                model=request_model,
-            )
-            provider = ai_result["provider"]
-            model = ai_result["model"]
-            variants = [{"index": index, "image": image} for index, image in enumerate(ai_result["images"])]
-        except (OpenAIProviderError, DashScopeProviderError, ZhipuProviderError) as exc:
-            if not (_env_mock_allowed() and _request_allows_mock(payload)):
+            if not allow_mock:
+                ai_result = _call_provider(
+                    provider_name,
+                    meta["prompt"],
+                    count=3,
+                    api_key=request_api_key,
+                    model=request_model,
+                )
+                provider = ai_result["provider"]
+                model = ai_result["model"]
+                variants = [{"index": index, "image": image} for index, image in enumerate(ai_result["images"])]
+            else:
+                raise RuntimeError("Offline demo requested")
+        except (RuntimeError, OpenAIProviderError, DashScopeProviderError, ZhipuProviderError) as exc:
+            if not allow_mock:
                 return _json_response(
                     self,
                     503,
@@ -166,7 +166,7 @@ class LootyHandler(BaseHTTPRequestHandler):
                         "provider": provider_name,
                         "model": request_model,
                         "hint": (
-                            "This request did not fall back to Mock. Check that the provider, model and API key are valid. "
+                            "Check that the provider, model and API key are valid. "
                             "For ZhipuAI try model glm-image first, or cogView-4-250304 if your account supports it."
                         ),
                         "prompt": meta["prompt"],

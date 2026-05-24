@@ -52,6 +52,14 @@ function sanitizeText(value, fallback = "方天画戟") {
   return (value || "").trim().replace(/\s+/g, " ") || fallback;
 }
 
+function apiKeyValue() {
+  return apiKeyInput.value.trim();
+}
+
+function isOfflineMode() {
+  return !apiKeyValue();
+}
+
 function setStatus(text, done = false, error = false) {
   statusPill.textContent = text;
   statusPill.classList.toggle("done", done);
@@ -76,7 +84,7 @@ function clearCanvas() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
-function drawPlaceholder(text = "等待 AI 生成") {
+function drawPlaceholder(text = "等待生成") {
   clearCanvas();
   ctx.save();
   ctx.translate(256, 256);
@@ -138,20 +146,28 @@ function updateDownloadName(result = {}) {
 
 function updateModelDefault() {
   modelInput.value = DEFAULT_MODELS[providerSelect.value] || "";
-  providerStatus.textContent = `${providerSelect.options[providerSelect.selectedIndex].textContent} / 未验证`;
-  providerStatus.className = "mock";
+  updateProviderStatus();
+}
+
+function updateProviderStatus() {
+  if (isOfflineMode()) {
+    providerStatus.textContent = "离线演示";
+    providerStatus.className = "mock";
+  } else {
+    providerStatus.textContent = `${providerSelect.options[providerSelect.selectedIndex].textContent} / 待验证`;
+    providerStatus.className = "error";
+  }
 }
 
 async function checkHealth() {
   try {
     const response = await fetch("/api/health");
     const health = await response.json();
-    if (health.provider === "unconfigured") {
-      providerStatus.textContent = "等待页面 Key";
-      providerStatus.className = "error";
-    } else {
+    if (!isOfflineMode() && health.provider !== "unconfigured") {
       providerStatus.textContent = `${health.provider} / 环境变量`;
       providerStatus.className = "ok";
+    } else {
+      updateProviderStatus();
     }
   } catch {
     providerStatus.textContent = "后端未连接";
@@ -160,14 +176,15 @@ async function checkHealth() {
 }
 
 async function requestBackend(upgradeText = "") {
+  const offline = isOfflineMode();
   const response = await fetch("/api/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       provider: providerSelect.value,
-      apiKey: apiKeyInput.value.trim(),
+      apiKey: apiKeyValue(),
       model: sanitizeText(modelInput.value, DEFAULT_MODELS[providerSelect.value]),
-      allowMock: false,
+      allowMock: offline,
       text: sanitizeText(promptInput.value),
       assetType: assetTypeSelect.value,
       style: styleSelect.value,
@@ -209,7 +226,8 @@ function renderVariants(result) {
     thumb.src = variant.image;
     thumb.alt = `变体 ${variant.index + 1}`;
     const label = document.createElement("div");
-    label.innerHTML = `<strong>变体 ${variant.index + 1}</strong><span>${result.provider} / ${result.model}</span>`;
+    const mode = result.provider === "mock" ? "离线演示" : `${result.provider} / ${result.model}`;
+    label.innerHTML = `<strong>变体 ${variant.index + 1}</strong><span>${mode}</span>`;
     card.append(thumb, label);
     card.addEventListener("click", () => {
       selectedVariant = variant.index;
@@ -240,34 +258,35 @@ async function runGeneration(upgradeText = "") {
   upgradeBtn.disabled = true;
   downloadBtn.disabled = true;
 
+  const offline = isOfflineMode();
   await wait(160);
   setStep("prompt", "done");
   setStep("generate", "active");
-  setStatus("调用真实 AI");
+  setStatus(offline ? "生成离线演示素材" : "调用真实 AI");
 
   try {
     const result = await requestBackend(activeUpgradeText);
-    if (result.provider === "mock") throw new Error("后端返回 Mock，说明没有走真实 AI。");
+    if (!offline && result.provider === "mock") throw new Error("后端返回 Mock，说明没有走真实 AI。");
     applyResult(result);
     setStep("generate", "done");
     setStep("remove", "active");
     setStatus("处理透明 PNG");
     await wait(160);
     setStep("remove", "done");
-    setStatus("AI 生成完成", true);
-    providerStatus.textContent = `${result.provider} / ${result.model}`;
-    providerStatus.className = "ok";
+    setStatus(offline ? "离线演示完成" : "AI 生成完成", true);
+    providerStatus.textContent = result.provider === "mock" ? "离线演示" : `${result.provider} / ${result.model}`;
+    providerStatus.className = result.provider === "mock" ? "mock" : "ok";
     generated = true;
   } catch (error) {
-    drawPlaceholder("AI 调用失败");
+    drawPlaceholder(offline ? "离线生成失败" : "AI 调用失败");
     variantStrip.innerHTML = "";
     updatePromptPreview(error.payload?.prompt || buildLocalPrompt());
-    updateThinking(error.payload?.thinking || ["真实 AI 接口没有成功返回图片，请检查 provider、模型名、Key 和余额。"]);
+    updateThinking(error.payload?.thinking || ["生成失败，请检查后端服务、provider、模型名、Key 或余额。"]);
     setStep("generate", "error");
-    setStatus("AI 调用失败", false, true);
-    providerStatus.textContent = "真实 AI 未成功";
+    setStatus(offline ? "离线生成失败" : "AI 调用失败", false, true);
+    providerStatus.textContent = offline ? "离线演示失败" : "真实 AI 未成功";
     providerStatus.className = "error";
-    window.alert(`AI 调用失败：${error.message}`);
+    window.alert(`${offline ? "离线生成失败" : "AI 调用失败"}：${error.message}`);
   } finally {
     generateBtn.disabled = false;
     upgradeBtn.disabled = false;
@@ -311,6 +330,7 @@ async function copyPrompt() {
   element.addEventListener("change", () => updatePromptPreview());
 });
 
+apiKeyInput.addEventListener("input", updateProviderStatus);
 providerSelect.addEventListener("change", updateModelDefault);
 randomBtn.addEventListener("click", randomExample);
 variantsBtn.addEventListener("click", () => {
