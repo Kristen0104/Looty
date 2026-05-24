@@ -459,11 +459,13 @@ canvas {
   box-shadow: 0 0 0 3px rgba(99, 230, 212, 0.12);
 }
 
-.variant-card canvas {
+.variant-card canvas,
+.variant-card img {
   width: 64px;
   height: 64px;
   border-radius: 8px;
   background: rgba(0, 0, 0, 0.22);
+  object-fit: contain;
 }
 
 .variant-card strong,
