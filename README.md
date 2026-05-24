@@ -4,61 +4,107 @@ Looty, Make games easy.
 
 Looty 是一个面向独立游戏开发者的 2D 游戏素材生成工具 MVP。目标是把“生图 -> 抠图 -> 导入引擎”的流程压缩成“输入文字 -> 选择风格 -> 下载透明 PNG”。
 
-## 在线演示
+## 本地运行
 
-当前版本可作为静态网页运行，适合部署到 GitHub Pages / Gitee Pages。
+推荐使用后端模式运行，这样前端会调用真实的 `/api/generate` 接口，完整展示“前端输入 -> 后端 Prompt 封装 -> 图片生成 -> 透明 PNG 返回”的产品链路。
 
-本地打开方式：
+```bash
+python backend/server.py
+```
 
-1. 克隆仓库。
-2. 直接用浏览器打开 `index.html`。
-3. 输入素材描述，选择素材类型和画风，点击“生成透明 PNG”。
+打开浏览器访问：
+
+```text
+http://127.0.0.1:8000
+```
+
+当前后端默认使用 `mock` provider，不需要 API Key，也不需要安装依赖。它会根据任意用户输入生成一张透明 PNG 图标，并返回 Prompt、素材类型、属性、进化等级和 3 个变体。
+
+如果直接打开 `index.html`，页面仍然可以运行，但会走前端本地兜底生成，能力弱于后端模式。
 
 ## 已实现功能
 
-- 文本输入：输入武器、道具或图标描述。
-- 画风选择：复古 2D 像素风、美漫粗线矢量风。
-- Prompt 封装：自动组合用户输入、画风关键词、白底独立道具约束和透明 PNG 交付要求。
-- 素材类型识别：支持剑、斧头、锤子、法杖、弓、盾牌、药水、金币/徽章。
-- 属性识别：支持火、冰、雷、毒、圣光等常见升级方向。
-- 一致性种子：同一种子下保持基础轮廓和配色稳定。
-- 变体生成：一次生成 3 个候选素材，方便选择。
-- 装备进化：基于当前素材方向添加升级描述，保持同类轮廓。
-- 透明 PNG 下载：Canvas 输出带 Alpha 通道的 512x512 PNG，可直接导入 Unity / Godot / Cocos。
+- 文本输入：支持任意武器、装备、道具描述。
+- 画风选择：精致像素风、美漫粗线图标。
+- 后端 Prompt 封装：自动组合用户输入、画风关键词、白底约束、透明 PNG 交付要求。
+- 后端生成接口：`POST /api/generate`。
+- 自定义道具兜底：无法归类到固定武器时，会生成“自定义道具 / 奥术”图标，而不是默认套成剑。
+- 属性识别：支持火、冰、雷、毒、圣光、暗影、奥术。
+- 变体生成：每次返回 3 个候选透明 PNG。
+- 装备进化：传入升级方向后进入 Tier 2，保留基础轮廓并增加宝石、符文和属性特效。
+- PNG 下载：导出透明背景 PNG，可直接导入 Unity / Godot / Cocos。
 
-## 当前技术实现
+## 技术结构
 
-为了保证评审可直接访问，当前版本采用纯前端实现，不依赖 API Key、后端服务器或付费额度。
+```text
+.
+├── index.html
+├── styles.css
+├── app.js
+├── backend
+│   ├── server.py
+│   ├── prompt_engine.py
+│   └── mock_generator.py
+└── requirements.txt
+```
 
-- 前端：HTML / CSS / JavaScript
-- 图像生成：Canvas 程序化绘制
-- 部署：静态页面
+前端：
 
-## 与 PRD 的关系
+- `index.html`：页面结构。
+- `styles.css`：响应式工作台 UI。
+- `app.js`：表单交互、接口调用、兜底 Canvas 生成、下载逻辑。
 
-原 PRD 中的商业化闭环是：
+后端：
 
-1. 前端收集文本、画风、素材类型和种子。
-2. 后端封装 Prompt。
-3. 调用即梦 1.5 或其他生图 API。
-4. 使用 `rembg` / Pillow 去除白底，输出 Alpha PNG。
-5. 返回透明素材给前端下载。
+- `server.py`：静态资源服务和 `/api/generate` 接口。
+- `prompt_engine.py`：素材类型识别、属性识别、Prompt 封装。
+- `mock_generator.py`：无依赖 PNG 生成器，用于没有真实 AI Key 时保持 Demo 可运行。
 
-当前 MVP 保留了用户交互、Prompt 封装、生成状态、变体选择、装备进化和透明 PNG 下载流程，但用 Canvas 程序化生成替代真实 AI 接口，降低演示失败风险。
+## API
 
-## 后续接入真实 AI 的改造点
+请求：
 
-- 新增 Python 后端服务。
-- 将 `app.js` 中的 Canvas 绘制替换为 `POST /api/generate` 请求。
-- 后端根据前端参数生成 Prompt。
-- 调用文生图 / 图生图 API。
-- 使用 `rembg` 将白底图片转为透明 PNG。
-- 将生成结果以图片 URL 或 Base64 返回前端。
+```http
+POST /api/generate
+Content-Type: application/json
+```
 
-## 文件说明
+```json
+{
+  "text": "mechanical dart",
+  "assetType": "auto",
+  "style": "vector",
+  "seed": "looty-demo",
+  "upgradeText": "add lightning core",
+  "variant": 0
+}
+```
 
-- `index.html`：页面结构和交互入口。
-- `styles.css`：响应式界面样式。
-- `app.js`：Prompt 封装、素材绘制、变体生成、下载和装备进化逻辑。
-- `INTERVIEW_NOTES.md`：面试评审说明和实现取舍。
-- `产品需求说明.md` / `需求问题说明.txt`：题目需求和提交规范参考。
+响应：
+
+```json
+{
+  "image": "data:image/png;base64,...",
+  "variants": [
+    { "index": 0, "image": "data:image/png;base64,..." }
+  ],
+  "prompt": "...",
+  "assetType": "relic",
+  "element": "lightning",
+  "tier": 2,
+  "provider": "mock"
+}
+```
+
+浏览器前端会以 UTF-8 JSON 请求后端，中文输入可以正常识别。若在 PowerShell 里手写接口测试，建议先用英文样例，避免终端编码影响中文请求体。
+
+## 后续接入真实 AI
+
+当前 `mock_generator.py` 是为了保证评审环境可运行。真实商业版本可以在 `server.py` 的 `/api/generate` 流程中替换 provider：
+
+1. 使用 `prompt_engine.py` 生成工业级 Prompt。
+2. 调用即梦 1.5 / OpenAI / Stability / 通义万相等文生图或图生图接口。
+3. 使用 `rembg` / Pillow 将白底图转为 Alpha PNG。
+4. 返回透明 PNG 给前端。
+
+这样前端交互、Prompt 封装、进化参数、变体展示和下载逻辑都可以继续复用。

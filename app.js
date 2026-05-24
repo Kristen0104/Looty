@@ -42,6 +42,7 @@ const ELEMENT_LABELS = {
   poison: "毒属性",
   holy: "圣光",
   shadow: "暗影",
+  arcane: "奥术",
 };
 
 const STYLE_PROMPTS = {
@@ -67,6 +68,7 @@ let lastConfig = null;
 let selectedVariant = 0;
 let currentName = "looty-asset";
 let activeUpgradeText = "";
+let backendResult = null;
 
 function sanitizeText(value, fallback = "火焰长剑") {
   return value.trim().replace(/\s+/g, " ") || fallback;
@@ -99,10 +101,20 @@ function detectType(text) {
   if (/[盾]/.test(text) || /shield/.test(lower)) return "shield";
   if (/[药瓶水剂]/.test(text) || /potion|bottle|elixir/.test(lower)) return "potion";
   if (/[金币徽章奖章]/.test(text) || /coin|badge|medal|crest/.test(lower)) return "coin";
-  return "sword";
+  return "relic";
 }
 
 function detectElement(text, upgradeText = "") {
+  if (upgradeText) {
+    const upgrade = upgradeText.toLowerCase();
+    if (/[火炎焰熔岩]/.test(upgradeText) || /fire|flame|burn|lava|ember/.test(upgrade)) return "fire";
+    if (/[冰霜雪寒晶]/.test(upgradeText) || /ice|frost|snow|cold|crystal/.test(upgrade)) return "ice";
+    if (/[雷电闪风暴]/.test(upgradeText) || /thunder|lightning|storm|electric/.test(upgrade)) return "lightning";
+    if (/[毒酸腐液]/.test(upgradeText) || /poison|toxic|acid|venom/.test(upgrade)) return "poison";
+    if (/[圣光神金]/.test(upgradeText) || /holy|light|divine|gold/.test(upgrade)) return "holy";
+    if (/[暗影黑夜紫]/.test(upgradeText) || /shadow|dark|void|night/.test(upgrade)) return "shadow";
+  }
+
   const joined = `${text} ${upgradeText}`.toLowerCase();
   if (/[火炎焰熔岩]/.test(joined) || /fire|flame|burn|lava|ember/.test(joined)) return "fire";
   if (/[冰霜雪寒晶]/.test(joined) || /ice|frost|snow|cold|crystal/.test(joined)) return "ice";
@@ -110,7 +122,7 @@ function detectElement(text, upgradeText = "") {
   if (/[毒酸腐液]/.test(joined) || /poison|toxic|acid|venom/.test(joined)) return "poison";
   if (/[圣光神金]/.test(joined) || /holy|light|divine|gold/.test(joined)) return "holy";
   if (/[暗影黑夜紫]/.test(joined) || /shadow|dark|void|night/.test(joined)) return "shadow";
-  return "neutral";
+  return "arcane";
 }
 
 function palette(element, seed) {
@@ -125,6 +137,7 @@ function palette(element, seed) {
       metal: "#d8e0ea",
       metalDark: "#677483",
     },
+    arcane: { main: "#50becd", dark: "#1a4a5b", light: "#e7f5ff", glow: "#ffc45b", metal: "#d8e0ea", metalDark: "#677483" },
     fire: { main: "#f05a32", dark: "#8f1f16", light: "#ffcf68", glow: "#ff9d2f", metal: "#e9d1b2", metalDark: "#80513b" },
     ice: { main: "#61d8ff", dark: "#1d6f9d", light: "#e8fbff", glow: "#b8f4ff", metal: "#eaf8ff", metalDark: "#5b8ca3" },
     lightning: { main: "#7f63ff", dark: "#35206f", light: "#fff06a", glow: "#ffe85c", metal: "#e0dcff", metalDark: "#62559b" },
@@ -579,12 +592,37 @@ const DRAWERS = {
   coin: drawCoin,
 };
 
+function drawRelic(targetCtx, config) {
+  const c = config.colors;
+  const random = seededRandom(config.seed);
+  const sides = 6 + Math.floor(random() * 3);
+  withCanvas(targetCtx, () => {
+    targetCtx.translate(256, 258);
+    targetCtx.rotate(-0.2 + random() * 0.4);
+    targetCtx.beginPath();
+    for (let i = 0; i < sides; i += 1) {
+      const angle = -Math.PI / 2 + (i * Math.PI * 2) / sides;
+      const radius = i % 2 === 0 ? 150 : 106;
+      const x = Math.cos(angle) * radius;
+      const y = Math.sin(angle) * radius;
+      if (i === 0) targetCtx.moveTo(x, y);
+      else targetCtx.lineTo(x, y);
+    }
+    targetCtx.closePath();
+    drawPath(targetCtx, makeGradient(targetCtx, -120, -140, 120, 140, [[0, c.light], [0.48, c.main], [1, c.dark]]), "#101721", 15);
+    drawGem(targetCtx, 0, 0, config.tier > 1 ? 42 : 32, c);
+    drawRunes(targetCtx, config, [[-66, -58, 8], [68, -52, 7], [-54, 58, 7], [56, 62, 8]]);
+  });
+}
+
+DRAWERS.relic = drawRelic;
+
 function drawAsset(targetCtx, config) {
   clearCanvas(targetCtx);
   targetCtx.imageSmoothingEnabled = true;
   drawHalo(targetCtx, config);
   drawVfx(targetCtx, config);
-  DRAWERS[config.type](targetCtx, config);
+  (DRAWERS[config.type] || DRAWERS.relic)(targetCtx, config);
   if (config.tier > 1) drawVfx(targetCtx, config);
   if (config.style === "pixel") pixelate(targetCtx);
 }
@@ -598,8 +636,69 @@ function updateDownloadName(config) {
 }
 
 function updateInspector(config) {
-  assetSummary.textContent = `${TYPE_LABELS[config.type]} / ${ELEMENT_LABELS[config.element]}`;
+  assetSummary.textContent = `${TYPE_LABELS[config.type] || "自定义道具"} / ${ELEMENT_LABELS[config.element] || "奥术"}`;
   tierSummary.textContent = `Tier ${config.tier}${config.tier > 1 ? " 进化" : ""}`;
+}
+
+function applyBackendResult(result, config) {
+  backendResult = result;
+  const image = new Image();
+  image.onload = () => {
+    clearCanvas(ctx);
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  };
+  image.src = result.image;
+
+  promptPreview.textContent = result.prompt;
+  updateDownloadName({ ...config, type: result.assetType || config.type, tier: result.tier || config.tier });
+  updateInspector({
+    ...config,
+    type: result.assetType || config.type,
+    element: result.element || config.element,
+    tier: result.tier || config.tier,
+  });
+  renderBackendVariants(result, config);
+}
+
+function renderBackendVariants(result, config) {
+  variantStrip.innerHTML = "";
+  result.variants.forEach((variant) => {
+    const card = document.createElement("button");
+    card.className = `variant-card${variant.index === selectedVariant ? " active" : ""}`;
+    card.type = "button";
+    const thumb = document.createElement("img");
+    thumb.src = variant.image;
+    thumb.alt = `变体 ${variant.index + 1}`;
+    const label = document.createElement("div");
+    label.innerHTML = `<strong>变体 ${variant.index + 1}</strong><span>${ELEMENT_LABELS[result.element] || "奥术"} / Tier ${result.tier}</span>`;
+    card.append(thumb, label);
+    card.addEventListener("click", () => {
+      selectedVariant = variant.index;
+      runGeneration(config.upgradeText || "");
+    });
+    variantStrip.append(card);
+  });
+}
+
+async function requestBackend(config) {
+  const response = await fetch("/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text: config.text,
+      assetType: assetTypeSelect.value,
+      style: config.style,
+      seed: seedInput.value,
+      upgradeText: config.upgradeText,
+      variant: selectedVariant,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Backend returned ${response.status}`);
+  }
+
+  return response.json();
 }
 
 function cloneConfig(config, variantIndex) {
@@ -632,7 +731,7 @@ function renderVariants(config) {
     thumb.height = 96;
     const copy = cloneConfig(config, i);
     const label = document.createElement("div");
-    label.innerHTML = `<strong>变体 ${i + 1}</strong><span>${ELEMENT_LABELS[copy.element]} / Tier ${copy.tier}</span>`;
+    label.innerHTML = `<strong>变体 ${i + 1}</strong><span>${ELEMENT_LABELS[copy.element] || "奥术"} / Tier ${copy.tier}</span>`;
     card.append(thumb, label);
     card.addEventListener("click", () => {
       selectedVariant = i;
@@ -647,6 +746,7 @@ async function runGeneration(upgradeText = "") {
   activeUpgradeText = upgradeText;
   const config = buildConfig(upgradeText);
   lastConfig = config;
+  backendResult = null;
   updateDownloadName(config);
   updatePromptPreview();
   updateInspector(config);
@@ -662,9 +762,16 @@ async function runGeneration(upgradeText = "") {
   setStep("generate", "active");
   setStatus(config.tier > 1 ? "生成进化部件" : "生成图标轮廓");
 
-  await wait(280);
-  drawAsset(ctx, config);
-  renderVariants(config);
+  await wait(180);
+  try {
+    const result = await requestBackend(config);
+    applyBackendResult(result, config);
+    setStatus(result.provider === "mock" ? "后端生成完成" : "AI 生成完成");
+  } catch {
+    drawAsset(ctx, config);
+    renderVariants(config);
+    setStatus("本地兜底生成");
+  }
   setStep("generate", "done");
   setStep("remove", "active");
   setStatus("处理透明通道");
@@ -712,7 +819,7 @@ function downloadCanvas() {
   if (!generated) return;
   const link = document.createElement("a");
   link.download = `${currentName}-512-transparent.png`;
-  link.href = canvas.toDataURL("image/png");
+  link.href = backendResult?.image || canvas.toDataURL("image/png");
   link.click();
 }
 
