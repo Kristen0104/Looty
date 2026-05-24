@@ -1,2 +1,6 @@
-# Looty MVP backend currently uses Python standard library only.
-# Optional future real-AI providers can add requests, pillow, rembg, etc.
+Pillow==11.1.0
+python-dotenv==1.0.1
+rembg==2.0.55
+requests==2.32.3
+streamlit==1.42.2
+
