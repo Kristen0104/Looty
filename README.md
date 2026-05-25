@@ -1,165 +1,180 @@
-# Looty
+# Looty 项目说明
 
-Looty, Make games easy.
+Looty 是一个面向 2D 游戏开发者的素材生成工具。  
+它的目标不是“随便画一张图”，而是把用户输入的装备描述、升级方向、风格偏好，整理成稳定的 Prompt，再交给真实的 AI 图像接口或本地 Mock 生成透明 PNG 素材。
 
-Looty 是一个面向独立游戏开发者的 AI 2D 游戏素材生成工具。用户输入“方天画戟”“龙骨匕首”“水晶头盔”这类自然语言需求后，系统会先做类型、属性、画风解析，再封装成稳定的生图 Prompt，调用真实 AI 图片 provider 生成透明 PNG 素材。
+## 这个项目能做什么
 
-## 现在解决了什么
+- 输入装备名称，例如“方天画戟”“龙骨匕首”“水晶头盔”
+- 自动识别素材类型、元素属性、风格
+- 生成适合游戏素材的 Prompt
+- 调用真实 AI 图像服务生成素材
+- 在没有 API Key 时切换到离线 Mock 演示
+- 生成 3 个候选变体，支持切换与下载
+- 输出透明背景 PNG，方便导入 Unity、Godot 等引擎
 
-- 不再把随机图案冒充 AI 结果：默认必须配置真实生图 API，离线 Mock 需要显式开启。
-- 中文输入可正常识别：修复了原项目中文乱码导致的类型、属性识别失效。
-- 生成不是“随机画”：后端会返回 AI 思考步骤、识别类型、属性主题、系统 Prompt 和负面约束。
-- 页面更像真实产品：左侧输入需求，右侧展示透明 PNG、候选变体、AI 思考和可复制 Prompt。
-- 支持装备进化：输入“附加雷电核心”等升级方向后，Prompt 会要求保留基础轮廓并叠加属性细节。
+## 项目是怎么实现的
+
+### 1. 前端
+
+前端由 `index.html`、`styles.css`、`app.js` 构成。
+
+页面负责：
+
+- 收集输入内容
+- 选择 Provider、模型、素材类型、风格
+- 发送 `POST /api/generate`
+- 展示生成结果、变体、Prompt 和思考步骤
+- 下载最终 PNG
+
+### 2. 后端
+
+后端入口是 `backend/server.py`。
+
+它负责：
+
+- 提供静态页面
+- 提供 `GET /api/health`
+- 提供 `POST /api/generate`
+- 调用 `backend/prompt_engine.py` 做语义解析
+- 按 Provider 调用真实图像接口
+- 在 Mock 模式下生成演示 PNG
+
+### 3. Prompt 引擎
+
+`backend/prompt_engine.py` 会把用户输入转换成更稳定的生成指令。
+
+它主要做四件事：
+
+- 识别素材类型，如 sword、axe、shield、polearm
+- 识别元素主题，如 fire、ice、lightning、poison、holy、shadow
+- 根据风格模板生成正向 Prompt
+- 生成负面约束，避免出现人物、场景、文字、水印、错误替代物
+
+### 4. 图像生成 Provider
+
+当前支持三类 Provider：
+
+- `zhipu`
+- `dashscope`
+- `openai`
+
+如果没有配置 API Key，或者显式开启 Mock，后端会生成本地演示图。
+
+## 目录结构
+
+```text
+Looty
+├─ index.html
+├─ styles.css
+├─ app.js
+├─ backend
+│  ├─ server.py
+│  ├─ prompt_engine.py
+│  ├─ openai_provider.py
+│  ├─ dashscope_provider.py
+│  ├─ zhipu_provider.py
+│  └─ mock_generator.py
+├─ requirements.txt
+└─ README.md
+```
 
 ## 本地运行
 
-安装依赖：
+### 1. 安装依赖
 
 ```bash
 pip install -r requirements.txt
 ```
 
-启动服务：
+### 2. 启动服务
 
 ```bash
 python backend/server.py
 ```
 
-浏览器打开：
+### 3. 打开页面
+
+浏览器访问：
 
 ```text
 http://127.0.0.1:8000
 ```
 
-## 配置真实 AI 生图
+## 如何使用
 
-现在页面左侧有“接口配置”区域，可以直接选择 provider 并输入 API Key：
+1. 在“素材描述”里输入你想要的装备名称。
+2. 选择“素材类型”，也可以保留为“自动识别”。
+3. 选择统一画风，例如 vector 或 pixel。
+4. 输入种子值，方便同类素材保持一致性。
+5. 填入 API Key 后，系统会调用真实 AI 服务。
+6. 点击“生成透明 PNG”。
+7. 如果生成了多个变体，可以点击变体卡片切换。
+8. 满意后点击“下载 PNG”。
 
-- `ZhipuAI 智谱`：模型默认 `glm-image`
-- `DashScope 通义万相`：模型默认 `wan2.6-t2i`
-- `OpenAI Images`：模型默认 `gpt-image-1-mini`
+## 升级玩法
 
-页面里填的 Key 只会随本次请求发送给本地后端，不会写入项目文件。Provider 的显示名称无所谓，但传给后端的值必须是 `zhipu`、`dashscope` 或 `openai`。
+在“装备进化”里输入升级方向，例如：
 
-### 页面直接使用 ZhipuAI
+- 附加雷电核心
+- 变为冰属性
+- 增加毒液光效
 
-1. 启动后端：
+点击“保留轮廓并进化”后，系统会在原始素材结构上继续增强，而不是重新随机画一个完全不同的物体。
 
-```powershell
-python backend/server.py
-```
+## 运行模式
 
-2. 浏览器打开 `http://127.0.0.1:8000`。
-3. Provider 选择 `ZhipuAI 智谱`。
-4. 模型保持 `glm-image`，或者改成你的智谱账号支持的图片模型，例如 `cogView-4-250304`。
-5. 在 API Key 输入框粘贴智谱 Key。
-6. 输入素材描述，点击“生成透明 PNG”。
+### 真实 AI 模式
 
-也可以用环境变量方式：
+适合正式使用。需要配置 Provider 和 API Key。
+
+#### ZhipuAI
 
 ```powershell
 $env:LOOTY_IMAGE_PROVIDER="zhipu"
-$env:ZHIPUAI_API_KEY="你的 ZhipuAI API Key"
+$env:ZHIPUAI_API_KEY="你的 API Key"
 $env:LOOTY_IMAGE_MODEL="glm-image"
 python backend/server.py
 ```
 
-### 方案 A：DashScope / 通义万相
-
-PowerShell：
+#### DashScope
 
 ```powershell
 $env:LOOTY_IMAGE_PROVIDER="dashscope"
-$env:DASHSCOPE_API_KEY="你的 DashScope API Key"
+$env:DASHSCOPE_API_KEY="你的 API Key"
 $env:LOOTY_IMAGE_MODEL="wan2.6-t2i"
 python backend/server.py
 ```
 
-可选地区：
-
-```powershell
-$env:DASHSCOPE_REGION="cn-beijing"
-```
-
-### 方案 B：OpenAI Images API
-
-PowerShell：
+#### OpenAI Images
 
 ```powershell
 $env:LOOTY_IMAGE_PROVIDER="openai"
-$env:OPENAI_API_KEY="你的 OpenAI API Key"
+$env:OPENAI_API_KEY="你的 API Key"
 $env:LOOTY_IMAGE_MODEL="gpt-image-1-mini"
 python backend/server.py
 ```
 
-后端会请求 OpenAI Images API，并优先要求 PNG 和透明背景输出。
+### 离线 Mock 模式
 
-## 离线演示模式
-
-没有 API Key 时，可以显式打开 Mock：
+没有 API Key 时，可以显式开启 Mock：
 
 ```powershell
 $env:LOOTY_ALLOW_MOCK="1"
 python backend/server.py
 ```
 
-Mock 只用于演示页面流程和透明 PNG 下载，不代表真实 AI 理解能力。比赛或答辩时建议使用真实 provider。
+这个模式适合演示界面流程和下载流程，不代表真实 AI 生成能力。
 
-## 使用流程
+## API 说明
 
-1. 在“素材描述”输入具体装备，例如“方天画戟”。
-2. 素材类型可以选“自动识别”，也可以手动指定“长柄武器”等类型。
-3. 选择画风：美漫粗线游戏图标或精致 2D 像素风。
-4. 点击“生成透明 PNG”，页面会展示 3 个候选变体。
-5. 在“升级方向”输入“附加雷电核心”，点击“保留轮廓并进化”。
-6. 满意后点击“下载 PNG”，得到可导入 Unity / Godot 的透明素材。
+### `GET /api/health`
 
-## 实现方式
+返回当前服务状态和 Provider 配置情况。
 
-项目是轻量前后端结构：
+### `POST /api/generate`
 
-```text
-.
-├── index.html
-├── styles.css
-├── app.js
-├── backend
-│   ├── server.py
-│   ├── prompt_engine.py
-│   ├── openai_provider.py
-│   ├── dashscope_provider.py
-│   └── mock_generator.py
-└── requirements.txt
-```
-
-核心链路：
-
-1. 前端把用户输入、素材类型、画风、种子、升级方向提交到 `POST /api/generate`。
-2. `backend/prompt_engine.py` 进行语义解析，识别素材类型和元素属性。
-3. Prompt 引擎生成生产级生图 Prompt、负面约束和可展示的“AI 思考”。
-4. `backend/server.py` 根据 `LOOTY_IMAGE_PROVIDER` 调用 DashScope 或 OpenAI。
-5. provider 返回图片后，后端统一转为 `data:image/png;base64,...`。
-6. 前端展示大图、3 个变体、生成意图、思考步骤，并支持下载 PNG。
-
-## 开源参考方向
-
-调研时参考了几类开源实现思路：
-
-- OpenAI / DALL-E 简易 Web App：学习“前端表单 + 后端 provider 包装”的最小可用结构。
-- Stable Diffusion / ComfyUI / Fooocus 类项目：借鉴“Prompt 模板、负面提示词、风格预设、批量候选图”的产品设计。
-- PromptForge 类提示词工具：借鉴“把用户短输入转为可解释生成计划”的交互方式。
-
-本项目没有直接复制大型项目代码，而是保留轻量架构，把关键能力落在 prompt 封装、真实 provider、可解释展示和透明 PNG 交付上。
-
-## API 示例
-
-请求：
-
-```http
-POST /api/generate
-Content-Type: application/json
-```
+请求示例：
 
 ```json
 {
@@ -168,23 +183,35 @@ Content-Type: application/json
   "style": "vector",
   "seed": "looty-demo",
   "upgradeText": "附加雷电核心",
-  "variant": 0
+  "variant": 0,
+  "provider": "openai",
+  "model": "gpt-image-1-mini",
+  "apiKey": "sk-xxxx",
+  "allowMock": false
 }
 ```
 
-响应会包含：
+响应里会包含：
 
-```json
-{
-  "image": "data:image/png;base64,...",
-  "variants": [],
-  "prompt": "...",
-  "assetType": "polearm",
-  "assetLabel": "长柄武器",
-  "element": "lightning",
-  "elementLabel": "雷电属性",
-  "tier": 2,
-  "thinking": ["..."],
-  "provider": "openai"
-}
-```
+- `image`：当前选中的图片
+- `variants`：候选变体列表
+- `prompt`：最终封装后的 Prompt
+- `assetType` / `assetLabel`
+- `element` / `elementLabel`
+- `tier`
+- `thinking`
+- `provider`
+- `model`
+
+## 使用建议
+
+- 输入尽量具体，识别效果会更稳定
+- 需要保持系列一致时，尽量固定 `seed`
+- 升级描述尽量写“保留原有轮廓，再增强材质、符文、元素特效”
+- 如果真实接口报错，先检查 Provider、模型名、API Key 和额度
+
+## 一句话总结
+
+Looty 的核心流程是：
+
+**用户输入描述 -> 后端解析素材类型和元素 -> 组装 Prompt -> 调用 AI 图像接口 -> 返回透明 PNG 素材**
